@@ -1,0 +1,15 @@
+# IDE (Eclipse)
+.classpath
+.project
+.settings/
+.metadata/
+
+# Fichiers compilés Java
+bin/
+*.class
+*.jar
+
+# Autres
+.DS_Store
+*.iml
+.idea/
