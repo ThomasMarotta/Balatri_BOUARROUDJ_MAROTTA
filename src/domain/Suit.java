@@ -3,10 +3,10 @@ package domain;
 import java.util.Objects;
 
 public enum Suit {
-    CLUBS("♣"),
-    DIAMONDS("♦"),
-    HEARTS("♥"),
-    SPADES("♠");
+    CLUBS("Clubs"),
+    DIAMONDS("Diamonds"),
+    HEARTS("Hearts"),
+    SPADES("Spades");
 
     private final String symbol;
 
