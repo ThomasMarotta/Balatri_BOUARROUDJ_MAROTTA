@@ -38,15 +38,15 @@ public class RankEvaluator {
 	}
 	
 	private static boolean isPair(Map<Rank, Long> rankGroup) {
-		return rankGroup.size() == 4 && rankGroup.values().stream().anyMatch(count -> count == 2L);
+		return rankGroup.values().stream().anyMatch(count -> count == 2L);
 	}
 	
 	private static boolean isTwoPairs(Map<Rank, Long> rankGroup) {
-		return rankGroup.size() == 3 && rankGroup.values().stream().filter(count -> count == 2L).count() == 2L;
+		return rankGroup.values().stream().filter(count -> count == 2L).count() == 2L;
 	}
 
 	private static boolean isThreeOfAKind(Map<Rank, Long> rankGroup) {
-		return rankGroup.size() == 3 && rankGroup.values().stream().anyMatch(count -> count == 3L);
+		return  rankGroup.values().stream().anyMatch(count -> count == 3L);
 	}
 	
 	private static boolean isStraight(Hand hand) {
@@ -65,11 +65,11 @@ public class RankEvaluator {
 	}
 	
 	private static boolean isFullHouse(Map<Rank, Long> rankGroup) {
-		return rankGroup.size() == 2 && rankGroup.values().containsAll(List.of(2L, 3L));
+		return rankGroup.values().containsAll(List.of(2L, 3L));
 	}
 	
 	private static boolean isFourOfAKind(Map<Rank, Long> rankGroup) {
-		return rankGroup.size() == 2 && rankGroup.values().containsAll(List.of(1L, 4L));
+		return  rankGroup.values().containsAll(List.of(1L, 4L));
 	}
 	
 	private static boolean isStraightFlush(Hand hand) {
