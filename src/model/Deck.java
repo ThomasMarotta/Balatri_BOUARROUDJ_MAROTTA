@@ -3,31 +3,48 @@ package model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import domain.Card;
 import domain.Rank;
 import domain.Suit;
 
 public class Deck {
-    private final List<Card> cards;
+    private final List<Card> drawPile;
+    private final List<Card> discardPile;
 
     public Deck() {
-        this.cards = new ArrayList<>();
+        this.drawPile = new ArrayList<Card>();
+        this.discardPile = new ArrayList<Card>();
         for (Suit suit : Suit.values()) {
             for (Rank rank : Rank.values()) {
-                this.cards.add(new Card(suit, rank));
+                this.drawPile.add(new Card(suit, rank));
             }
         }
-        Collections.shuffle(this.cards);
+        Collections.shuffle(this.drawPile);
     }
 
     /** Tire une seule carte du dessus du deck. */
     public Card drawOne() {
-        if (cards.isEmpty()) throw new IllegalStateException("Deck vide !");
-        return cards.remove(0);
+        if (drawPile.isEmpty()) {
+        	this.recycleDiscard();
+        }
+        return drawPile.remove(0);
+    }
+    
+    public void addToDiscard(Card remainingCard) {
+    	Objects.requireNonNull(remainingCard);
+    	this.discardPile.add(remainingCard);
+    }
+    
+    public void recycleDiscard() {
+    	this.drawPile.addAll(discardPile);
+    	this.discardPile.clear();
+    	Collections.shuffle(this.drawPile);
+    	
     }
 
     public int remaining() {
-        return cards.size();
+        return drawPile.size();
     }
 }
