@@ -20,7 +20,7 @@ public class ConsoleView implements View {
     @Override
     public void displayBanner() {
         IO.println("\n=============================================");
-        IO.println("               BALATRO-LITE                  ");
+        IO.println("                  BALATRI                    ");
         IO.println("=============================================\n");
     }
 
@@ -34,7 +34,6 @@ public class ConsoleView implements View {
         
         IO.println("Your hand:");
         for (int i = 0; i < hand.size(); i++) {
-            // Formatted display (e.g.: [0] Ace of Hearts)
             IO.println("  [" + i + "] " + hand.get(i).rank() + " of " + hand.get(i).suit());
         }
         IO.println("---------------------------------------------");
