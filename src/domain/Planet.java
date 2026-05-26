@@ -1,5 +1,7 @@
 package domain;
 
+import java.util.Arrays;
+
 public enum Planet {
     PLUTO   (HandRank.HIGH_CARD,       10, 1),
     MERCURY (HandRank.PAIR,            15, 1),
@@ -19,5 +21,19 @@ public enum Planet {
         this.target     = target;
         this.bonusChips = bonusChips;
         this.bonusMult  = bonusMult;
+    }
+    
+    public int bonusChips() {
+    	return bonusChips;
+    }
+    public int bonusMult() {
+    	return bonusMult;
+    }
+    
+    public static Planet planetByRank(HandRank handRank) {
+        return Arrays.stream(Planet.values())
+                     .filter(p -> p.target == handRank)
+                     .findFirst()
+                     .orElseThrow(() -> new IllegalArgumentException("Aucune planète pour : " + handRank));
     }
 }

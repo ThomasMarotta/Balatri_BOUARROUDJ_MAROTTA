@@ -1,5 +1,6 @@
 package domain;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,7 +52,7 @@ public class RankEvaluator {
 	    	return new EvaluatedHand(hand, HandRank.PAIR, pairCards);
 	    }
 
-	    return new EvaluatedHand(hand, HandRank.HIGH_CARD, cards);
+	    return new EvaluatedHand(hand, HandRank.HIGH_CARD, getBestCardForHighCard(hand));
 	}
 	
 	private static Map<Rank, Long> groupByRank(List<Card> cards) {
@@ -66,10 +67,10 @@ public class RankEvaluator {
 	
     private static List<Card> getStraightCards(Hand hand) {
         var cards = hand.cards();
-        var orders = cards.stream().map(c -> c.rank().value()).sorted().toList();
+        var orders = cards.stream().map(c -> c.rank().ordinal()).sorted().toList();
         
-        // Low card A-2-3-4-5 -> {2,3,4,5,14}
-        var isStraight = orders.equals(List.of(2, 3, 4, 5, 14))
+        // Low card A-2-3-4-5 -> {0,1,2,3,12}
+        var isStraight = orders.equals(List.of(0, 1, 2, 3, 12))
                 || IntStream.range(1, orders.size()).allMatch(i -> orders.get(i) == orders.get(i - 1) + 1);
 
         return isStraight ? cards : List.of();
@@ -91,7 +92,10 @@ public class RankEvaluator {
         var flush = getFlushCards(hand);
         return (!straight.isEmpty() && !flush.isEmpty()) ? hand.cards() : List.of();
     }
-
+    
+    private static List<Card> getBestCardForHighCard(Hand hand) {
+        return hand.cards().stream().max(Comparator.comparingInt(card -> card.rank().ordinal())).stream().toList();
+    }            
 
 	private static List<Card> getByCount(Map<Rank, Long> rankGroup,List<Card> cards, long count) {
 	    return cards.stream().filter(c -> rankGroup.get(c.rank()) == count).toList();

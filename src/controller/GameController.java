@@ -2,8 +2,11 @@ package controller;
 
 import java.util.stream.Stream;
 
+import domain.Card;
 import domain.EvaluatedHand;
 import domain.Hand;
+import domain.Planet;
+import domain.Rank;
 import domain.RankEvaluator;
 import model.BlindManager;
 import model.Deck;
@@ -70,12 +73,19 @@ public class GameController{
     	}
     }
     
-    private int evaluateScore(EvaluatedHand evaluateHand) {
-    	var currentLevel = planetManager.getLevel(evaluateHand.handRank());
-    	var chips = evaluateHand.handRank().getBaseChips() + ((currentLevel - 1) * evaluateHand.handRank().getBaseMult());
-    	var mult = evaluateHand.handRank().getBaseMult() + ((currentLevel - 1) * evaluateHand.handRank().getBaseMult());
+    
+    private int evaluateScore(EvaluatedHand evaluatedHand) {
+    	var currentLevel = planetManager.getLevel(evaluatedHand.handRank());
+    	var activesCard = evaluatedHand.activesCards();
+    	var planet = Planet.planetByRank(evaluatedHand.handRank());
+   
     	
+        var chips = evaluatedHand.handRank().baseChips() + ((currentLevel - 1) * planet.bonusChips());
+        var mult  = evaluatedHand.handRank().baseMult()  + ((currentLevel - 1) * planet.bonusMult());
+
     	
-    	return mult * chips;
+    	var cardChips = activesCard.stream().map(Card::rank).mapToInt(Rank::chipValue).sum();
+    	
+    	return (chips + cardChips) * mult;
     }
 }
