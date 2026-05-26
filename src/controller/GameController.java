@@ -42,7 +42,8 @@ public class GameController{
     		int handScore = evaluateScore(evaluateHand); 
     		gameView.displayHandResult(handScore, evaluateHand.handRank().name());
     		
-    		gameState = new GameState(gameState.currentBlind(), gameState.gameScore() + handScore, gameState.handsLeft() - 1);
+    		gameState.incrementScore(handScore);
+    		gameState.decrementHands();
     		
     		if (gameState.isBlindBeaten()) {
     			if (blindManager.isLastBlind(gameState.currentBlind())) {
@@ -58,7 +59,9 @@ public class GameController{
                 planetManager.applyPlanet(reward);
                 gameView.displayPlanetReward(reward, planetManager.getLevel(reward.target));
                 
-                gameState = new GameState(blindManager.getNextBlind(gameState.currentBlind()), 0, HANDS_PER_ROUND);
+                gameState.changeBlind(blindManager.getNextBlind(gameState.currentBlind()));
+                gameState.resetScore();
+                gameState.resetHandsLeft(HANDS_PER_ROUND);
     		}else if (gameState.handsLeft() == 0) {
                 gameView.displayGameOver(false);
                 break; 
