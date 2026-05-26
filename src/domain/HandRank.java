@@ -19,6 +19,6 @@ public enum HandRank {
         this.baseMult  = baseMult;
     }
 
-    public int getBaseChips() { return baseChips; }
-    public int getBaseMult()  { return baseMult; }
+    public int baseChips() { return baseChips; }
+    public int baseMult()  { return baseMult; }
 }

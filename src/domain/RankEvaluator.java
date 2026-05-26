@@ -66,10 +66,10 @@ public class RankEvaluator {
 	
     private static List<Card> getStraightCards(Hand hand) {
         var cards = hand.cards();
-        var orders = cards.stream().map(c -> c.rank().value()).sorted().toList();
+        var orders = cards.stream().map(c -> c.rank().ordinal()).sorted().toList();
         
-        // Low card A-2-3-4-5 -> {2,3,4,5,14}
-        var isStraight = orders.equals(List.of(2, 3, 4, 5, 14))
+        // Low card A-2-3-4-5 -> {0,1,2,3,12}
+        var isStraight = orders.equals(List.of(0, 1, 2, 3, 12))
                 || IntStream.range(1, orders.size()).allMatch(i -> orders.get(i) == orders.get(i - 1) + 1);
 
         return isStraight ? cards : List.of();
