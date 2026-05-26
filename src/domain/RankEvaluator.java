@@ -1,5 +1,6 @@
 package domain;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,7 +52,7 @@ public class RankEvaluator {
 	    	return new EvaluatedHand(hand, HandRank.PAIR, pairCards);
 	    }
 
-	    return new EvaluatedHand(hand, HandRank.HIGH_CARD, cards);
+	    return new EvaluatedHand(hand, HandRank.HIGH_CARD, getBestCardForHighCard(hand));
 	}
 	
 	private static Map<Rank, Long> groupByRank(List<Card> cards) {
@@ -91,7 +92,10 @@ public class RankEvaluator {
         var flush = getFlushCards(hand);
         return (!straight.isEmpty() && !flush.isEmpty()) ? hand.cards() : List.of();
     }
-
+    
+    private static List<Card> getBestCardForHighCard(Hand hand) {
+        return hand.cards().stream().max(Comparator.comparingInt(card -> card.rank().ordinal())).stream().toList();
+    }            
 
 	private static List<Card> getByCount(Map<Rank, Long> rankGroup,List<Card> cards, long count) {
 	    return cards.stream().filter(c -> rankGroup.get(c.rank()) == count).toList();
