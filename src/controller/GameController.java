@@ -22,6 +22,7 @@ public class GameController{
     private static final int HAND_SIZE = 8;
     private static final int CARDS_TO_PLAY = 5;
     private static final int HANDS_PER_ROUND = 4;
+    private static final int DISCARDS_PER_ROUND  = 4;
     
     public GameController() {
     	this.deck = new Deck();
@@ -31,16 +32,22 @@ public class GameController{
     
     public void game(View gameView) {
     	gameView.displayBanner();
-    	var gameState = new GameState(this.blindManager.getFirstBlind(), 0, HANDS_PER_ROUND);
+    	var gameState = new GameState(this.blindManager.getFirstBlind(), 0, HANDS_PER_ROUND, DISCARDS_PER_ROUND);
+    	var currentHand = Stream.generate(deck::drawOne).limit(HAND_SIZE).toList();
     	while(true) {
-    		var currentHand = Stream.generate(deck::drawOne).limit(HAND_SIZE).toList();
+    		Stream.generate(deck::drawOne).limit(HAND_SIZE - currentHand.size()).forEach(currentHand::add);
     		gameView.displayState(gameState, currentHand);
+    		
+    		if(!gameView.displayPlayerAction(gameState.canDiscard())){
+    			var discardIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
+                discardIndices.stream().map(currentHand::get).forEach(deck::addToDiscard);
+                gameState.decrementDiscards();
+                continue;
+    		}
     		
     		var selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
     		
     		var hand = new Hand(selectedIndices.stream().map(currentHand::get).toList());
-    		hand.cards().forEach(deck::addToDiscard);
-    		
     		var evaluateHand = RankEvaluator.evaluate(hand);
     		int handScore = evaluateScore(evaluateHand); 
     		gameView.displayHandResult(handScore, evaluateHand.handRank().name());
@@ -65,6 +72,7 @@ public class GameController{
                 gameState.changeBlind(blindManager.getNextBlind(gameState.currentBlind()));
                 gameState.resetScore();
                 gameState.resetHandsLeft(HANDS_PER_ROUND);
+                gameState.resetDiscardsLeft(DISCARDS_PER_ROUND);
     		}else if (gameState.handsLeft() == 0) {
                 gameView.displayGameOver(false);
                 break; 

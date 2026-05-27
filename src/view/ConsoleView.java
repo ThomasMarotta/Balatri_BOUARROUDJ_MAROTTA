@@ -2,6 +2,7 @@ package view;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Scanner;
 
 import domain.Card;
@@ -26,10 +27,13 @@ public class ConsoleView implements View {
 
     @Override
     public void displayState(GameState state, List<Card> hand) {
+    	Objects.requireNonNull(state);
+    	Objects.requireNonNull(hand);
         IO.println("---------------------------------------------");
         IO.println("Current Blind : " + state.currentBlind().name());
         IO.println("Target        : " + state.gameScore() + " / " + state.currentBlind().targetScore() + " chips");
         IO.println("Hands left    : " + state.handsLeft());
+        IO.println("Discards left : " + state.discardsLeft());
         IO.println("---------------------------------------------");
         
         IO.println("Your hand:");
@@ -41,14 +45,24 @@ public class ConsoleView implements View {
 
     @Override
     public List<Integer> promptCardSelection(int exactCount, int maxIndex) {
+    	if(exactCount < 0) {
+    		throw new IllegalArgumentException("exact count must be positive !");
+    	}
+    	if(maxIndex < 0) {
+    		throw new IllegalArgumentException("max index must be positive !");
+    	}
         while (true) {
-            IO.println("\nEnter the indices of " + exactCount + " cards to play, separated by spaces (e.g., 0 2 3 5 7):");
+            IO.println("\nEnter the indices of " + exactCount + " cards, separated by spaces (e.g., 0 2 3 5 7):");
             IO.print("> ");
             String input = scanner.nextLine().trim();
 
             try {
                 List<Integer> indices = new ArrayList<>();
                 String[] tokens = input.split("\\s+");
+                
+                if(tokens[0] == "p") {
+                	
+                }
 
                 for (String token : tokens) {
                     int index = Integer.parseInt(token);
@@ -77,6 +91,10 @@ public class ConsoleView implements View {
 
     @Override
     public void displayHandResult(int scoreObtained, String handName) {
+    	if(scoreObtained < 0) {
+    		throw new IllegalArgumentException("Score must be positive");
+    	}
+    	Objects.requireNonNull(handName);
         IO.println("\n=> Played hand: " + handName);
         IO.println("=> Points scored: +" + scoreObtained + " chips!\n");
     }
@@ -88,12 +106,17 @@ public class ConsoleView implements View {
 
     @Override
     public void displayPlanetReward(Planet planet, int newLevel) {
+    	Objects.requireNonNull(planet);
+    	if(newLevel < 0) {
+    		throw new IllegalArgumentException("The new level must be positive");
+    	}
         IO.println("Reward obtained: Planet " + planet.name());
         IO.println("The hand [" + planet.target + "] levels up to LEVEL " + newLevel + "!\n");
     }
 
     @Override
     public void displayGameOver(boolean isVictory) {
+    	Objects.requireNonNull(isVictory);
         IO.println("\n=============================================");
         if (isVictory) {
             IO.println("CONGRATULATIONS, YOU WON!");
@@ -104,4 +127,29 @@ public class ConsoleView implements View {
         }
         IO.println("=============================================\n");
     }
+
+	@Override
+	public boolean displayPlayerAction(boolean canDiscard) {
+		Objects.requireNonNull(canDiscard);
+		if(!canDiscard) {
+			return true;
+		} else {
+			while(true) {
+				IO.println("Enter p for play your hand or d for discard your hand");
+				IO.print("> ");
+				var input = scanner.nextLine();
+				IO.println(input);
+				
+				if(input.equals("p")) {
+					return true;
+				}else if(input.equals("d")) {
+					return false;
+				}else {
+					IO.println("You must enter p for play your hand or d for discard your hand");
+					IO.print(">");
+					input = scanner.nextLine();
+				}
+			}
+		}
+	}    
 }
