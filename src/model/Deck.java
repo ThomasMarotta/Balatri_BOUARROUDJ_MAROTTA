@@ -32,9 +32,9 @@ public class Deck {
         return drawPile.remove(0);
     }
     
-    public void addToDiscard(Card remainingCard) {
-    	Objects.requireNonNull(remainingCard);
-    	this.discardPile.add(remainingCard);
+    public void addToDiscard(Card cardToDiscard) {
+    	Objects.requireNonNull(cardToDiscard);
+    	this.discardPile.add(cardToDiscard);
     }
     
     public void recycleDiscard() {

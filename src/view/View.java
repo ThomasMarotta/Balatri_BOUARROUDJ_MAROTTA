@@ -11,6 +11,8 @@ public interface View {
     void displayBanner();
 
     void displayState(GameState state, List<Card> hand);
+    
+    boolean displayPlayerAction(boolean canDiscard);
 
     List<Integer> promptCardSelection(int exactCount, int maxIndex);
 

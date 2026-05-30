@@ -50,4 +50,10 @@ public class ZenView implements View {
 		
 	}
 
+	@Override
+	public boolean displayPlayerAction(boolean canDiscard) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 }
