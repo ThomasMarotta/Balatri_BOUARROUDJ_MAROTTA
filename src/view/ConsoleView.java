@@ -59,10 +59,6 @@ public class ConsoleView implements View {
             try {
                 List<Integer> indices = new ArrayList<>();
                 String[] tokens = input.split("\\s+");
-                
-                if(tokens[0] == "p") {
-                	
-                }
 
                 for (String token : tokens) {
                     int index = Integer.parseInt(token);
@@ -146,8 +142,6 @@ public class ConsoleView implements View {
 					return false;
 				}else {
 					IO.println("You must enter p for play your hand or d for discard your hand");
-					IO.print(">");
-					input = scanner.nextLine();
 				}
 			}
 		}

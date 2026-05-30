@@ -1,5 +1,7 @@
 package controller;
 
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import domain.Card;
@@ -33,21 +35,24 @@ public class GameController{
     public void game(View gameView) {
     	gameView.displayBanner();
     	var gameState = new GameState(this.blindManager.getFirstBlind(), 0, HANDS_PER_ROUND, DISCARDS_PER_ROUND);
-    	var currentHand = Stream.generate(deck::drawOne).limit(HAND_SIZE).toList();
+    	var currentHand = Stream.generate(deck::drawOne).limit(HAND_SIZE).collect(Collectors.toCollection(ArrayList::new));
     	while(true) {
     		Stream.generate(deck::drawOne).limit(HAND_SIZE - currentHand.size()).forEach(currentHand::add);
     		gameView.displayState(gameState, currentHand);
     		
     		if(!gameView.displayPlayerAction(gameState.canDiscard())){
     			var discardIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
-                discardIndices.stream().map(currentHand::get).forEach(deck::addToDiscard);
+                var cardsToDiscard = discardIndices.stream().map(currentHand::get).toList();
+                cardsToDiscard.forEach(deck::addToDiscard);
                 gameState.decrementDiscards();
+                currentHand.removeAll(cardsToDiscard);
                 continue;
     		}
     		
     		var selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
     		
     		var hand = new Hand(selectedIndices.stream().map(currentHand::get).toList());
+    		currentHand.removeAll(hand.cards());
     		var evaluateHand = RankEvaluator.evaluate(hand);
     		int handScore = evaluateScore(evaluateHand); 
     		gameView.displayHandResult(handScore, evaluateHand.handRank().name());
