@@ -52,6 +52,7 @@ public class GameController{
     		var selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
     		
     		var hand = new Hand(selectedIndices.stream().map(currentHand::get).toList());
+    		hand.cards().forEach(deck::addToDiscard);
     		currentHand.removeAll(hand.cards());
     		var evaluateHand = RankEvaluator.evaluate(hand);
     		int handScore = evaluateScore(evaluateHand); 
