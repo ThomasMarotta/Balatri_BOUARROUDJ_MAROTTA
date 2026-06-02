@@ -22,7 +22,9 @@ public enum Planet {
         this.bonusChips = bonusChips;
         this.bonusMult  = bonusMult;
     }
-    
+    public HandRank target() {
+    	return target;
+    }
     public int bonusChips() {
     	return bonusChips;
     }
