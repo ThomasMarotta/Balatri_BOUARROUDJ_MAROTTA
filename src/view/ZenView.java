@@ -14,396 +14,448 @@ import com.github.forax.zen.KeyboardEvent;
 import com.github.forax.zen.PointerEvent;
 
 import domain.Card;
+import domain.Hand;
 import domain.Planet;
 import model.GameState;
 
 public class ZenView implements View {
 
-    // --- Constantes graphiques ---
-    private static final int WIDTH        = 1200;
-    private static final int HEIGHT       = 800;
-    private static final int CARD_W       = 80;
-    private static final int CARD_H       = 110;
-    private static final int CARD_SPACING = 95;
-    private static final int HAND_Y       = 550;
-    private static final int HAND_START_X = 100;
+	// --- Constantes graphiques ---
+	private static final int WIDTH = 1200;
+	private static final int HEIGHT = 800;
+	private static final int CARD_W = 80;
+	private static final int CARD_H = 110;
+	private static final int CARD_SPACING = 95;
+	private static final int HAND_Y = 550;
+	private static final int HAND_START_X = 100;
 
-    private static final Color BG_COLOR       = new Color(34, 85, 34);
-    private static final Color CARD_COLOR     = Color.WHITE;
-    private static final Color SELECTED_COLOR = new Color(255, 230, 50);
-    private static final Color TEXT_COLOR     = Color.WHITE;
-    private static final Color RED_COLOR      = new Color(200, 30, 30);
-    private static final Color INFO_BG        = new Color(0, 0, 0, 160);
+	private static final Color BG_COLOR = new Color(34, 85, 34);
+	private static final Color CARD_COLOR = Color.WHITE;
+	private static final Color SELECTED_COLOR = new Color(255, 230, 50);
+	private static final Color TEXT_COLOR = Color.WHITE;
+	private static final Color RED_COLOR = new Color(200, 30, 30);
+	private static final Color INFO_BG = new Color(0, 0, 0, 160);
 
-    private static final Font FONT_TITLE  = new Font("Arial", Font.BOLD, 28);
-    private static final Font FONT_NORMAL = new Font("Arial", Font.PLAIN, 18);
-    private static final Font FONT_CARD   = new Font("Arial", Font.BOLD, 16);
-    private static final Font FONT_SMALL  = new Font("Arial", Font.PLAIN, 14);
+	private static final Font FONT_TITLE = new Font("Arial", Font.BOLD, 28);
+	private static final Font FONT_NORMAL = new Font("Arial", Font.PLAIN, 18);
+	private static final Font FONT_CARD = new Font("Arial", Font.BOLD, 16);
+	private static final Font FONT_SMALL = new Font("Arial", Font.PLAIN, 14);
 
-    // --- État interne ---
-    private ApplicationContext context;
-    private List<Card>         currentHand  = List.of();
-    private GameState          currentState = null;
-    private final List<Integer> selectedIndices = new ArrayList<>();
+	// --- État interne ---
+	private ApplicationContext context;
+	private List<Card> currentHand = List.of();
+	private GameState currentState = null;
+	private final List<Integer> selectedIndices = new ArrayList<>();
 
-    // Messages à afficher temporairement
-    private String messageLine1 = "";
-    private String messageLine2 = "";
+	// Messages à afficher temporairement
+	private String messageLine1 = "";
+	private String messageLine2 = "";
 
-    // File pour transmettre les indices sélectionnés au controller
-    private final BlockingQueue<List<Integer>> selectionQueue = new ArrayBlockingQueue<>(1);
-    // File pour transmettre le choix jouer/défausser
-    private final BlockingQueue<Boolean> actionQueue = new ArrayBlockingQueue<>(1);
+	// File pour transmettre les indices sélectionnés au controller
+	private final BlockingQueue<List<Integer>> selectionQueue = new ArrayBlockingQueue<>(1);
+	// File pour transmettre le choix jouer/défausser
+	private final BlockingQueue<Boolean> actionQueue = new ArrayBlockingQueue<>(1);
 
-    // Mode courant : WAITING_ACTION, SELECTING_CARDS, DISPLAY_ONLY
-    private enum Mode { DISPLAY_ONLY, WAITING_ACTION, SELECTING_CARDS }
-    private Mode   mode          = Mode.DISPLAY_ONLY;
-    private int    exactCount    = 5;
-    private boolean canDiscard   = false;
+	// Mode courant : WAITING_ACTION, SELECTING_CARDS, DISPLAY_ONLY
+	private enum Mode {
+		DISPLAY_ONLY, WAITING_ACTION, SELECTING_CARDS
+	}
 
-    // -----------------------------------------------------------------------
-    // Lancement de la fenêtre Zen dans un thread séparé
-    // -----------------------------------------------------------------------
-    public ZenView() {
-        Thread zenThread = new Thread(() ->
-            Application.run(BG_COLOR, ctx -> {
-                this.context = ctx;
-                var screen = ctx.getScreenInfo();
-                runLoop(ctx, screen.width(), screen.height());
-            })
-        );
-        zenThread.setDaemon(true);
-        zenThread.start();
+	private Mode mode = Mode.DISPLAY_ONLY;
+	private int exactCount = 5;
+	private boolean canDiscard = false;
 
-        // Attendre que le contexte Zen soit prêt
-        while (context == null) {
-            Thread.yield();
-        }
-    }
+	// -----------------------------------------------------------------------
+	// Lancement de la fenêtre Zen dans un thread séparé
+	// -----------------------------------------------------------------------
+	public ZenView() {
+		Thread zenThread = new Thread(() -> Application.run(BG_COLOR, ctx -> {
+			this.context = ctx;
+			var screen = ctx.getScreenInfo();
+			runLoop(ctx, screen.width(), screen.height());
+		}));
+		zenThread.setDaemon(true);
+		zenThread.start();
 
-    // -----------------------------------------------------------------------
-    // Boucle principale Zen
-    // -----------------------------------------------------------------------
-    private void runLoop(ApplicationContext ctx, int w, int h) {
-        for (;;) {
-            var event = ctx.pollOrWaitEvent(16); // ~60fps
+		// Attendre que le contexte Zen soit prêt
+		while (context == null) {
+			Thread.yield();
+		}
+	}
 
-            if (event != null) {
-                switch (event) {
-                    case KeyboardEvent ke -> handleKeyboard(ke);
-                    case PointerEvent  pe -> handlePointer(pe);
-                    default -> {}
-                }
-            }
+	// -----------------------------------------------------------------------
+	// Boucle principale Zen
+	// -----------------------------------------------------------------------
+	private void runLoop(ApplicationContext ctx, int w, int h) {
+		for (;;) {
+			var event = ctx.pollOrWaitEvent(16); // ~60fps
 
-            render(ctx, w, h);
-        }
-    }
+			if (event != null) {
+				switch (event) {
+				case KeyboardEvent ke -> handleKeyboard(ke);
+				case PointerEvent pe -> {
+					handlePointer(pe);
+					sortByColorClicked(pe);
+					sortByRankClicked(pe);
+				}
+				default -> {
+				}
+				}
+			}
 
-    // -----------------------------------------------------------------------
-    // Gestion des événements
-    // -----------------------------------------------------------------------
-    private void handleKeyboard(KeyboardEvent ke) {
-        if (ke.action() != KeyboardEvent.Action.KEY_PRESSED) return;
+			render(ctx, w, h);
+		}
+	}
 
-        switch (mode) {
-            case WAITING_ACTION -> {
-                if (ke.key() == KeyboardEvent.Key.P) {
-                    mode = Mode.DISPLAY_ONLY;
-                    actionQueue.offer(true);   // jouer
-                } else if (ke.key() == KeyboardEvent.Key.D && canDiscard) {
-                    mode = Mode.DISPLAY_ONLY;
-                    actionQueue.offer(false);  // défausser
-                }
-            }
-            case SELECTING_CARDS -> {
-                // Valider la sélection avec Entrée
-                if (ke.key() == KeyboardEvent.Key.A) {
-                    if (selectedIndices.size() == exactCount) {
-                        mode = Mode.DISPLAY_ONLY;
-                        selectionQueue.offer(new ArrayList<>(selectedIndices));
-                        selectedIndices.clear();
-                    } else {
-                        messageLine1 = "Sélectionnez exactement " + exactCount + " cartes !";
-                        messageLine2 = "";
-                    }
-                }
-            }
-            default -> {}
-        }
-    }
+	// -----------------------------------------------------------------------
+	// Gestion des événements
+	// -----------------------------------------------------------------------
+	private void handleKeyboard(KeyboardEvent ke) {
+		if (ke.action() != KeyboardEvent.Action.KEY_PRESSED)
+			return;
 
-    private void handlePointer(PointerEvent pe) {
-        if (pe.action() != PointerEvent.Action.POINTER_UP) return;
+		switch (mode) {
+		case WAITING_ACTION -> {
+			if (ke.key() == KeyboardEvent.Key.P) {
+				mode = Mode.DISPLAY_ONLY;
+				actionQueue.offer(true); // jouer
+			} else if (ke.key() == KeyboardEvent.Key.D && canDiscard) {
+				mode = Mode.DISPLAY_ONLY;
+				actionQueue.offer(false); // défausser
+			}
+		}
+		case SELECTING_CARDS -> {
+			// Valider la sélection avec Entrée
+			if (ke.key() == KeyboardEvent.Key.A) {
+				if (selectedIndices.size() == exactCount) {
+					mode = Mode.DISPLAY_ONLY;
+					selectionQueue.offer(new ArrayList<>(selectedIndices));
+					selectedIndices.clear();
+				} else {
+					messageLine1 = "Sélectionnez exactement " + exactCount + " cartes !";
+					messageLine2 = "";
+				}
+			}
+		}
+		default -> {
+		}
+		}
+	}
 
-        float px = pe.location().x();
-        float py = pe.location().y();
+	private void handlePointer(PointerEvent pe) {
+		if (pe.action() != PointerEvent.Action.POINTER_UP)
+			return;
 
-        if (mode == Mode.SELECTING_CARDS) {
-            // Vérifier si on clique sur une carte
-            for (int i = 0; i < currentHand.size(); i++) {
-                int cx = HAND_START_X + i * CARD_SPACING;
-                int cy = HAND_Y;
-                if (px >= cx && px <= cx + CARD_W && py >= cy && py <= cy + CARD_H) {
-                    if (selectedIndices.contains(i)) {
-                        selectedIndices.remove(Integer.valueOf(i));
-                    } else if (selectedIndices.size() < exactCount) {
-                        selectedIndices.add(i);
-                    }
-                    return;
-                }
-            }
-        }
+		float px = pe.location().x();
+		float py = pe.location().y();
 
-        if (mode == Mode.WAITING_ACTION) {
-            // Bouton "Jouer"
-            if (px >= 400 && px <= 560 && py >= 700 && py <= 740) {
-                mode = Mode.DISPLAY_ONLY;
-                actionQueue.offer(true);
-            }
-            // Bouton "Défausser"
-            if (canDiscard && px >= 600 && px <= 760 && py >= 700 && py <= 740) {
-                mode = Mode.DISPLAY_ONLY;
-                actionQueue.offer(false);
-            }
-        }
-    }
+		if (mode == Mode.SELECTING_CARDS) {
+			// Vérifier si on clique sur une carte
+			for (int i = 0; i < currentHand.size(); i++) {
+				int cx = HAND_START_X + i * CARD_SPACING;
+				int cy = HAND_Y;
+				if (px >= cx && px <= cx + CARD_W && py >= cy && py <= cy + CARD_H) {
+					if (selectedIndices.contains(i)) {
+						selectedIndices.remove(Integer.valueOf(i));
+					} else if (selectedIndices.size() < exactCount) {
+						selectedIndices.add(i);
+					}
+					return;
+				}
+			}
+		}
 
-    // -----------------------------------------------------------------------
-    // Rendu graphique
-    // -----------------------------------------------------------------------
-    private void render(ApplicationContext ctx, int w, int h) {
-        context.renderFrame(g -> {
-            // Fond
-            g.setColor(BG_COLOR);
-            g.fillRect(0, 0, w, h);
+		if (mode == Mode.WAITING_ACTION) {
+			// Bouton "Jouer"
+			if (px >= 400 && px <= 560 && py >= 700 && py <= 740) {
+				mode = Mode.DISPLAY_ONLY;
+				actionQueue.offer(true);
+			}
+			// Bouton "Défausser"
+			if (canDiscard && px >= 600 && px <= 760 && py >= 700 && py <= 740) {
+				mode = Mode.DISPLAY_ONLY;
+				actionQueue.offer(false);
+			}
+		}
+	}
 
-            // Titre
-            g.setFont(FONT_TITLE);
-            g.setColor(TEXT_COLOR);
-            g.drawString("BALATRI", w / 2 - 60, 45);
+	private void sortByColorClicked(PointerEvent pe) {
+		float px = pe.location().x();
+		float py = pe.location().y();
 
-            // Panneau infos blind
-            if (currentState != null) {
-                drawInfoPanel(g, w);
-            }
+		if (mode == Mode.WAITING_ACTION) {
+			if (px >= 900 && px <= 1050 && py >= 800 && py <= 850) {
+				IO.println("test");
+				currentHand = Hand.sortByColor(currentHand);
+			}
+		}
+	}
+	
+	private void sortByRankClicked(PointerEvent pe) {
+		float px = pe.location().x();
+		float py = pe.location().y();
 
-            // Cartes en main
-            drawHand(g);
+		if (mode == Mode.WAITING_ACTION) {
+			if (px >= 1100 && px <= 1250 && py >= 800 && py <= 850) {
+				IO.println("test");
+				currentHand = Hand.sortByRank(currentHand);
+			}
+		}
+	}
+	// -----------------------------------------------------------------------
+	// Rendu graphique
+	// -----------------------------------------------------------------------
 
-            // Messages
-            drawMessages(g, w, h);
+	public void drawOrderByColorButton(java.awt.Graphics2D g) {
+		g.setColor(RED_COLOR);
+		g.fillRect(900, 800, 150, 50);
+		g.setColor(TEXT_COLOR);
+		g.drawString("TRIE_debug", 900 + 60 / 2, 800 + 45 / 2);
+	}
+	
+	public void drawOrderByRankButton(java.awt.Graphics2D g) {
+		g.setColor(RED_COLOR);
+		g.fillRect(1100, 800, 150, 50);
+		g.setColor(TEXT_COLOR);
+		g.drawString("TRIE_debug2", 1100 + 60 / 2, 800 + 45 / 2);
+	}
 
-            // Instructions selon le mode
-            drawInstructions(g, w, h);
-        });
-    }
+	private void render(ApplicationContext ctx, int w, int h) {
+		context.renderFrame(g -> {
+			// Fond
+			g.setColor(BG_COLOR);
+			g.fillRect(0, 0, w, h);
 
-    private void drawInfoPanel(java.awt.Graphics2D g, int w) {
-        g.setColor(INFO_BG);
-        g.fillRoundRect(20, 60, 400, 120, 15, 15);
+			// Titre
+			g.setFont(FONT_TITLE);
+			g.setColor(TEXT_COLOR);
+			g.drawString("BALATRI", w / 2 - 60, 45);
 
-        g.setFont(FONT_NORMAL);
-        g.setColor(TEXT_COLOR);
-        g.drawString("Blind : " + currentState.currentBlind().name(), 35, 90);
-        g.drawString("Score : " + currentState.gameScore()
-                + " / " + currentState.currentBlind().targetScore(), 35, 115);
-        g.drawString("Mains restantes : " + currentState.handsLeft(), 35, 140);
-        g.drawString("Défausses restantes : " + currentState.discardsLeft(), 35, 165);
-    }
+			// Panneau infos blind
+			if (currentState != null) {
+				drawInfoPanel(g, w);
+			}
+			// Cartes en main
+			drawHand(g);
 
-    private void drawHand(java.awt.Graphics2D g) {
-        for (int i = 0; i < currentHand.size(); i++) {
-            Card card = currentHand.get(i);
-            int  cx   = HAND_START_X + i * CARD_SPACING;
-            int  cy   = selectedIndices.contains(i) ? HAND_Y - 20 : HAND_Y;
+			// Messages
+			drawMessages(g, w, h);
 
-            // Ombre
-            g.setColor(new Color(0, 0, 0, 100));
-            g.fillRoundRect(cx + 4, cy + 4, CARD_W, CARD_H, 10, 10);
+			// Instructions selon le mode
+			drawInstructions(g, w, h);
 
-            // Corps de la carte
-            g.setColor(selectedIndices.contains(i) ? SELECTED_COLOR : CARD_COLOR);
-            g.fillRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
+			// Sort button
+			drawOrderByColorButton(g);
+			drawOrderByRankButton(g);
+		});
+	}
 
-            // Bordure
-            g.setColor(Color.DARK_GRAY);
-            g.drawRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
+	private void drawInfoPanel(java.awt.Graphics2D g, int w) {
+		g.setColor(INFO_BG);
+		g.fillRoundRect(20, 60, 400, 120, 15, 15);
 
-            // Texte rang
-            boolean isRed = card.suit().name().equals("HEARTS")
-                         || card.suit().name().equals("DIAMONDS");
-            g.setColor(isRed ? RED_COLOR : Color.BLACK);
-            g.setFont(FONT_CARD);
+		g.setFont(FONT_NORMAL);
+		g.setColor(TEXT_COLOR);
+		g.drawString("Blind : " + currentState.currentBlind().name(), 35, 90);
+		g.drawString("Score : " + currentState.gameScore() + " / " + currentState.currentBlind().targetScore(), 35, 115);
+		g.drawString("Mains restantes : " + currentState.handsLeft(), 35, 140);
+		g.drawString("Défausses restantes : " + currentState.discardsLeft(), 35, 165);
+	}
 
-            String rankStr = shortRank(card.rank().name());
-            String suitStr = suitSymbol(card.suit().name());
+	private void drawHand(java.awt.Graphics2D g) {
+		for (int i = 0; i < currentHand.size(); i++) {
+			Card card = currentHand.get(i);
+			int cx = HAND_START_X + i * CARD_SPACING;
+			int cy = selectedIndices.contains(i) ? HAND_Y - 20 : HAND_Y;
 
-            g.drawString(rankStr, cx + 8, cy + 22);
-            g.drawString(suitStr, cx + 8, cy + 40);
+			// Ombre
+			g.setColor(new Color(0, 0, 0, 100));
+			g.fillRoundRect(cx + 4, cy + 4, CARD_W, CARD_H, 10, 10);
 
-            // Indice en bas
-            g.setFont(FONT_SMALL);
-            g.setColor(Color.GRAY);
-            g.drawString("[" + i + "]", cx + CARD_W / 2 - 10, cy + CARD_H - 6);
-        }
-    }
+			// Corps de la carte
+			g.setColor(selectedIndices.contains(i) ? SELECTED_COLOR : CARD_COLOR);
+			g.fillRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
 
-    private void drawMessages(java.awt.Graphics2D g, int w, int h) {
-        if (!messageLine1.isEmpty()) {
-            g.setFont(FONT_NORMAL);
-            g.setColor(SELECTED_COLOR);
-            g.drawString(messageLine1, w / 2 - 200, h - 100);
-        }
-        if (!messageLine2.isEmpty()) {
-            g.setFont(FONT_NORMAL);
-            g.setColor(TEXT_COLOR);
-            g.drawString(messageLine2, w / 2 - 200, h - 75);
-        }
-    }
+			// Bordure
+			g.setColor(Color.DARK_GRAY);
+			g.drawRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
 
-    private void drawInstructions(java.awt.Graphics2D g, int w, int h) {
-        switch (mode) {
-            case SELECTING_CARDS -> {
-                g.setFont(FONT_NORMAL);
-                g.setColor(TEXT_COLOR);
-                g.drawString("Cliquez sur " + exactCount + " cartes puis appuyez sur ENTRÉE",
-                        w / 2 - 220, h - 40);
-                g.drawString("(" + selectedIndices.size() + "/" + exactCount + " sélectionnées)",
-                        w / 2 - 80, h - 15);
-            }
-            case WAITING_ACTION -> {
-                // Bouton Jouer
-                g.setColor(new Color(50, 150, 50));
-                g.fillRoundRect(400, 700, 160, 40, 10, 10);
-                g.setColor(TEXT_COLOR);
-                g.setFont(FONT_NORMAL);
-                g.drawString("(P) Jouer", 430, 726);
+			// Texte rang
+			boolean isRed = card.suit().name().equals("HEARTS") || card.suit().name().equals("DIAMONDS");
+			g.setColor(isRed ? RED_COLOR : Color.BLACK);
+			g.setFont(FONT_CARD);
 
-                if (canDiscard) {
-                    // Bouton Défausser
-                    g.setColor(new Color(150, 80, 30));
-                    g.fillRoundRect(600, 700, 160, 40, 10, 10);
-                    g.setColor(TEXT_COLOR);
-                    g.drawString("(D) Défausser", 615, 726);
-                }
-            }
-            default -> {}
-        }
-    }
+			String rankStr = shortRank(card.rank().name());
+			String suitStr = suitSymbol(card.suit().name());
 
-    // -----------------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------------
-    private String shortRank(String rankName) {
-        return switch (rankName) {
-            case "ACE"   -> "A";
-            case "KING"  -> "K";
-            case "QUEEN" -> "Q";
-            case "JACK"  -> "J";
-            case "TEN"   -> "10";
-            case "NINE"  -> "9";
-            case "EIGHT" -> "8";
-            case "SEVEN" -> "7";
-            case "SIX"   -> "6";
-            case "FIVE"  -> "5";
-            case "FOUR"  -> "4";
-            case "THREE" -> "3";
-            case "TWO"   -> "2";
-            default      -> rankName;
-        };
-    }
+			g.drawString(rankStr, cx + 8, cy + 22);
+			g.drawString(suitStr, cx + 8, cy + 40);
 
-    private String suitSymbol(String suitName) {
-        return switch (suitName) {
-            case "HEARTS"   -> "♥";
-            case "DIAMONDS" -> "♦";
-            case "CLUBS"    -> "♣";
-            case "SPADES"   -> "♠";
-            default         -> suitName;
-        };
-    }
+			// Indice en bas
+			g.setFont(FONT_SMALL);
+			g.setColor(Color.GRAY);
+			g.drawString("[" + i + "]", cx + CARD_W / 2 - 10, cy + CARD_H - 6);
+		}
+	}
 
-    // -----------------------------------------------------------------------
-    // Implémentation de View
-    // -----------------------------------------------------------------------
-    @Override
-    public void displayBanner() {
-        // Le titre est déjà affiché en permanence dans render()
-    }
+	private void drawMessages(java.awt.Graphics2D g, int w, int h) {
+		if (!messageLine1.isEmpty()) {
+			g.setFont(FONT_NORMAL);
+			g.setColor(SELECTED_COLOR);
+			g.drawString(messageLine1, w / 2 - 200, h - 100);
+		}
+		if (!messageLine2.isEmpty()) {
+			g.setFont(FONT_NORMAL);
+			g.setColor(TEXT_COLOR);
+			g.drawString(messageLine2, w / 2 - 200, h - 75);
+		}
+	}
 
-    @Override
-    public void displayState(GameState state, List<Card> hand) {
-        Objects.requireNonNull(state);
-        Objects.requireNonNull(hand);
-        this.currentState = state;
-        this.currentHand  = hand;
-        this.selectedIndices.clear();
-    }
+	private void drawInstructions(java.awt.Graphics2D g, int w, int h) {
+		switch (mode) {
+		case SELECTING_CARDS -> {
+			g.setFont(FONT_NORMAL);
+			g.setColor(TEXT_COLOR);
+			g.drawString("Cliquez sur " + exactCount + " cartes puis appuyez sur ENTRÉE", w / 2 - 220, h - 40);
+			g.drawString("(" + selectedIndices.size() + "/" + exactCount + " sélectionnées)", w / 2 - 80, h - 15);
+		}
+		case WAITING_ACTION -> {
+			// Bouton Jouer
+			g.setColor(new Color(50, 150, 50));
+			g.fillRoundRect(400, 700, 160, 40, 10, 10);
+			g.setColor(TEXT_COLOR);
+			g.setFont(FONT_NORMAL);
+			g.drawString("(P) Jouer", 430, 726);
 
-    @Override
-    public List<Integer> promptCardSelection(int exactCount, int maxIndex) {
-        this.exactCount = exactCount;
-        this.mode       = Mode.SELECTING_CARDS;
-        this.selectedIndices.clear();
-        this.messageLine1 = "";
-        this.messageLine2 = "";
+			if (canDiscard) {
+				// Bouton Défausser
+				g.setColor(new Color(150, 80, 30));
+				g.fillRoundRect(600, 700, 160, 40, 10, 10);
+				g.setColor(TEXT_COLOR);
+				g.drawString("(D) Défausser", 615, 726);
+			}
+		}
+		default -> {
+		}
+		}
+	}
 
-        try {
-            return selectionQueue.take(); // bloque jusqu'à validation
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return List.of();
-        }
-    }
+	// -----------------------------------------------------------------------
+	// Helpers
+	// -----------------------------------------------------------------------
+	private String shortRank(String rankName) {
+		return switch (rankName) {
+		case "ACE" -> "A";
+		case "KING" -> "K";
+		case "QUEEN" -> "Q";
+		case "JACK" -> "J";
+		case "TEN" -> "10";
+		case "NINE" -> "9";
+		case "EIGHT" -> "8";
+		case "SEVEN" -> "7";
+		case "SIX" -> "6";
+		case "FIVE" -> "5";
+		case "FOUR" -> "4";
+		case "THREE" -> "3";
+		case "TWO" -> "2";
+		default -> rankName;
+		};
+	}
 
-    @Override
-    public void displayHandResult(int scoreObtained, String handName) {
-        messageLine1 = "Main jouée : " + handName;
-        messageLine2 = "Points marqués : +" + scoreObtained + " chips !";
-        sleep(2000);
-    }
+	private String suitSymbol(String suitName) {
+		return switch (suitName) {
+		case "HEARTS" -> "♥";
+		case "DIAMONDS" -> "♦";
+		case "CLUBS" -> "♣";
+		case "SPADES" -> "♠";
+		default -> suitName;
+		};
+	}
 
-    @Override
-    public void displayBlindBeaten() {
-        messageLine1 = "✔ BLIND BATTU !";
-        messageLine2 = "";
-        sleep(2000);
-    }
+	// -----------------------------------------------------------------------
+	// Implémentation de View
+	// -----------------------------------------------------------------------
+	@Override
+	public void displayBanner() {
+		// Le titre est déjà affiché en permanence dans render()
+	}
 
-    @Override
-    public void displayPlanetReward(Planet planet, int newLevel) {
-        Objects.requireNonNull(planet);
-        messageLine1 = "Récompense : Planète " + planet.name();
-        messageLine2 = planet.target() + " passe au NIVEAU " + newLevel + " !";
-        sleep(2500);
-    }
+	@Override
+	public void displayState(GameState state, List<Card> hand) {
+		Objects.requireNonNull(state);
+		Objects.requireNonNull(hand);
+		this.currentState = state;
+		this.currentHand = hand;
+		this.selectedIndices.clear();
+	}
 
-    @Override
-    public void displayGameOver(boolean isVictory) {
-        messageLine1 = isVictory ? "🏆 FÉLICITATIONS, VOUS AVEZ GAGNÉ !" : "GAME OVER";
-        messageLine2 = isVictory ? "Tous les blinds ont été battus !" 
-                                 : "Plus assez de mains pour atteindre la cible.";
-        sleep(4000);
-        if (context != null) context.dispose();
-    }
+	@Override
+	public List<Integer> promptCardSelection(int exactCount, int maxIndex) {
+		this.exactCount = exactCount;
+		this.mode = Mode.SELECTING_CARDS;
+		this.selectedIndices.clear();
+		this.messageLine1 = "";
+		this.messageLine2 = "";
 
-    @Override
-    public boolean displayPlayerAction(boolean canDiscard) {
-        this.canDiscard   = canDiscard;
-        this.mode         = Mode.WAITING_ACTION;
-        this.messageLine1 = "";
-        this.messageLine2 = "";
+		try {
+			return selectionQueue.take(); // bloque jusqu'à validation
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return List.of();
+		}
+	}
 
-        try {
-            return actionQueue.take(); // bloque jusqu'au choix
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return true;
-        }
-    }
+	@Override
+	public void displayHandResult(int scoreObtained, String handName) {
+		messageLine1 = "Main jouée : " + handName;
+		messageLine2 = "Points marqués : +" + scoreObtained + " chips !";
+		sleep(2000);
+	}
 
-    private void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-    }
+	@Override
+	public void displayBlindBeaten() {
+		messageLine1 = "✔ BLIND BATTU !";
+		messageLine2 = "";
+		sleep(2000);
+	}
+
+	@Override
+	public void displayPlanetReward(Planet planet, int newLevel) {
+		Objects.requireNonNull(planet);
+		messageLine1 = "Récompense : Planète " + planet.name();
+		messageLine2 = planet.target() + " passe au NIVEAU " + newLevel + " !";
+		sleep(2500);
+	}
+
+	@Override
+	public void displayGameOver(boolean isVictory) {
+		messageLine1 = isVictory ? "🏆 FÉLICITATIONS, VOUS AVEZ GAGNÉ !" : "GAME OVER";
+		messageLine2 = isVictory ? "Tous les blinds ont été battus !" : "Plus assez de mains pour atteindre la cible.";
+		sleep(4000);
+		if (context != null)
+			context.dispose();
+	}
+
+	@Override
+	public boolean displayPlayerAction(boolean canDiscard) {
+		this.canDiscard = canDiscard;
+		this.mode = Mode.WAITING_ACTION;
+		this.messageLine1 = "";
+		this.messageLine2 = "";
+
+		try {
+			return actionQueue.take(); // bloque jusqu'au choix
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return true;
+		}
+	}
+
+	private void sleep(long ms) {
+		try {
+			Thread.sleep(ms);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
 }
