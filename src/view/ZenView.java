@@ -21,23 +21,40 @@ import model.GameState;
 public class ZenView implements View {
 
 	// --- Constantes graphiques ---
-	private static final int WIDTH = 1200;
-	private static final int HEIGHT = 800;
 	private static final int CARD_W = 80;
 	private static final int CARD_H = 110;
 	private static final int CARD_SPACING = 95;
 	private static final int HAND_Y = 550;
 	private static final int HAND_START_X = 100;
 
+	private static final int PLAY_BTN_X = 900;
+	private static final int PLAY_BTN_Y = 560;
+	private static final int DISCARD_BTN_X = 900;
+	private static final int DISCARD_BTN_Y = 630;
+	private static final int BTN_W = 200;
+	private static final int BTN_H = 55;
+
+	private static final int SORT_RANK_X = 900;
+	private static final int SORT_RANK_Y = 710;
+	private static final int SORT_COLOR_X = 1010;
+	private static final int SORT_COLOR_Y = 710;
+	private static final int SORT_W = 100;
+	private static final int SORT_H = 35;
+
 	private static final Color BG_COLOR = new Color(34, 85, 34);
 	private static final Color CARD_COLOR = Color.WHITE;
 	private static final Color SELECTED_COLOR = new Color(255, 230, 50);
 	private static final Color TEXT_COLOR = Color.WHITE;
 	private static final Color RED_COLOR = new Color(200, 30, 30);
+	private static final Color GREEN_BTN = new Color(50, 150, 50);
+	private static final Color GREEN_BTN_DIM = new Color(50, 150, 50, 90);
+	private static final Color ORANGE_BTN = new Color(200, 100, 30);
+	private static final Color ORANGE_BTN_DIM = new Color(200, 100, 30, 90);
 	private static final Color INFO_BG = new Color(0, 0, 0, 160);
 
 	private static final Font FONT_TITLE = new Font("Arial", Font.BOLD, 28);
 	private static final Font FONT_NORMAL = new Font("Arial", Font.PLAIN, 18);
+	private static final Font FONT_BTN = new Font("Arial", Font.BOLD, 20);
 	private static final Font FONT_CARD = new Font("Arial", Font.BOLD, 16);
 	private static final Font FONT_SMALL = new Font("Arial", Font.PLAIN, 14);
 
@@ -47,27 +64,20 @@ public class ZenView implements View {
 	private GameState currentState = null;
 	private final List<Integer> selectedIndices = new ArrayList<>();
 
-	// Messages à afficher temporairement
 	private String messageLine1 = "";
 	private String messageLine2 = "";
 
-	// File pour transmettre les indices sélectionnés au controller
+	// File unique : on transmet les indices après clic sur un des deux boutons.
 	private final BlockingQueue<List<Integer>> selectionQueue = new ArrayBlockingQueue<>(1);
-	// File pour transmettre le choix jouer/défausser
-	private final BlockingQueue<Boolean> actionQueue = new ArrayBlockingQueue<>(1);
+	// Mémorise quel bouton a été cliqué pour le retourner via displayPlayerAction.
+	private boolean lastAction = true;
 
-	// Mode courant : WAITING_ACTION, SELECTING_CARDS, DISPLAY_ONLY
-	private enum Mode {
-		DISPLAY_ONLY, WAITING_ACTION, SELECTING_CARDS
-	}
+	private enum Mode { DISPLAY_ONLY, PLAYING }
 
 	private Mode mode = Mode.DISPLAY_ONLY;
 	private int exactCount = 5;
-	private boolean canDiscard = false;
+	private boolean shouldClose = false;
 
-	// -----------------------------------------------------------------------
-	// Lancement de la fenêtre Zen dans un thread séparé
-	// -----------------------------------------------------------------------
 	public ZenView() {
 		Thread zenThread = new Thread(() -> Application.run(BG_COLOR, ctx -> {
 			this.context = ctx;
@@ -77,29 +87,24 @@ public class ZenView implements View {
 		zenThread.setDaemon(true);
 		zenThread.start();
 
-		// Attendre que le contexte Zen soit prêt
 		while (context == null) {
 			Thread.yield();
 		}
 	}
 
-	// -----------------------------------------------------------------------
-	// Boucle principale Zen
-	// -----------------------------------------------------------------------
 	private void runLoop(ApplicationContext ctx, int w, int h) {
 		for (;;) {
-			var event = ctx.pollOrWaitEvent(16); // ~60fps
+			if (shouldClose) {
+				ctx.dispose();
+				return;
+			}
+			var event = ctx.pollOrWaitEvent(16);
 
 			if (event != null) {
 				switch (event) {
 				case KeyboardEvent ke -> handleKeyboard(ke);
-				case PointerEvent pe -> {
-					handlePointer(pe);
-					sortByColorClicked(pe);
-					sortByRankClicked(pe);
-				}
-				default -> {
-				}
+				case PointerEvent pe -> handlePointer(pe);
+				default -> {}
 				}
 			}
 
@@ -108,149 +113,124 @@ public class ZenView implements View {
 	}
 
 	// -----------------------------------------------------------------------
-	// Gestion des événements
+	// Événements
 	// -----------------------------------------------------------------------
 	private void handleKeyboard(KeyboardEvent ke) {
-		if (ke.action() != KeyboardEvent.Action.KEY_PRESSED)
-			return;
+		if (ke.action() != KeyboardEvent.Action.KEY_PRESSED) return;
+		if (mode != Mode.PLAYING) return;
 
-		switch (mode) {
-		case WAITING_ACTION -> {
-			if (ke.key() == KeyboardEvent.Key.P) {
-				mode = Mode.DISPLAY_ONLY;
-				actionQueue.offer(true); // jouer
-			} else if (ke.key() == KeyboardEvent.Key.D && canDiscard) {
-				mode = Mode.DISPLAY_ONLY;
-				actionQueue.offer(false); // défausser
-			}
-		}
-		case SELECTING_CARDS -> {
-			// Valider la sélection avec Entrée
-			if (ke.key() == KeyboardEvent.Key.A) {
-				if (selectedIndices.size() == exactCount) {
-					mode = Mode.DISPLAY_ONLY;
-					selectionQueue.offer(new ArrayList<>(selectedIndices));
-					selectedIndices.clear();
-				} else {
-					messageLine1 = "Sélectionnez exactement " + exactCount + " cartes !";
-					messageLine2 = "";
-				}
-			}
-		}
-		default -> {
-		}
+		if (ke.key() == KeyboardEvent.Key.P) {
+			tryPlay();
+		} else if (ke.key() == KeyboardEvent.Key.D && canDiscardNow()) {
+			tryDiscard();
 		}
 	}
 
 	private void handlePointer(PointerEvent pe) {
-		if (pe.action() != PointerEvent.Action.POINTER_UP)
-			return;
+		if (pe.action() != PointerEvent.Action.POINTER_UP) return;
+		if (mode != Mode.PLAYING) return;
 
 		float px = pe.location().x();
 		float py = pe.location().y();
 
-		if (mode == Mode.SELECTING_CARDS) {
-			// Vérifier si on clique sur une carte
-			for (int i = 0; i < currentHand.size(); i++) {
-				int cx = HAND_START_X + i * CARD_SPACING;
-				int cy = HAND_Y;
-				if (px >= cx && px <= cx + CARD_W && py >= cy && py <= cy + CARD_H) {
-					if (selectedIndices.contains(i)) {
-						selectedIndices.remove(Integer.valueOf(i));
-					} else if (selectedIndices.size() < exactCount) {
-						selectedIndices.add(i);
-					}
-					return;
+		// 1. Toggle sélection d'une carte
+		for (int i = 0; i < currentHand.size(); i++) {
+			int cx = HAND_START_X + i * CARD_SPACING;
+			int cy = selectedIndices.contains(i) ? HAND_Y - 20 : HAND_Y;
+			if (inRect(px, py, cx, cy, CARD_W, CARD_H)) {
+				if (selectedIndices.contains(i)) {
+					selectedIndices.remove(Integer.valueOf(i));
+				} else if (selectedIndices.size() < exactCount) {
+					selectedIndices.add(i);
 				}
+				messageLine1 = "";
+				return;
 			}
 		}
 
-		if (mode == Mode.WAITING_ACTION) {
-			// Bouton "Jouer"
-			if (px >= 400 && px <= 560 && py >= 700 && py <= 740) {
-				mode = Mode.DISPLAY_ONLY;
-				actionQueue.offer(true);
-			}
-			// Bouton "Défausser"
-			if (canDiscard && px >= 600 && px <= 760 && py >= 700 && py <= 740) {
-				mode = Mode.DISPLAY_ONLY;
-				actionQueue.offer(false);
-			}
+		// 2. Bouton Jouer
+		if (inRect(px, py, PLAY_BTN_X, PLAY_BTN_Y, BTN_W, BTN_H)) {
+			tryPlay();
+			return;
 		}
-	}
 
-	private void sortByColorClicked(PointerEvent pe) {
-		float px = pe.location().x();
-		float py = pe.location().y();
-
-		if (mode == Mode.WAITING_ACTION) {
-			if (px >= 900 && px <= 1050 && py >= 800 && py <= 850) {
-				IO.println("test");
-				currentHand = Hand.sortByColor(currentHand);
-			}
+		// 3. Bouton Défausser
+		if (canDiscardNow() && inRect(px, py, DISCARD_BTN_X, DISCARD_BTN_Y, BTN_W, BTN_H)) {
+			tryDiscard();
+			return;
 		}
-	}
-	
-	private void sortByRankClicked(PointerEvent pe) {
-		float px = pe.location().x();
-		float py = pe.location().y();
 
-		if (mode == Mode.WAITING_ACTION) {
-			if (px >= 1100 && px <= 1250 && py >= 800 && py <= 850) {
-				IO.println("test");
-				currentHand = Hand.sortByRank(currentHand);
-			}
+		// 4. Tri (la sélection devient invalide → on la vide)
+		if (inRect(px, py, SORT_RANK_X, SORT_RANK_Y, SORT_W, SORT_H)) {
+			currentHand = Hand.sortByRank(currentHand);
+			selectedIndices.clear();
+			return;
+		}
+		if (inRect(px, py, SORT_COLOR_X, SORT_COLOR_Y, SORT_W, SORT_H)) {
+			currentHand = Hand.sortByColor(currentHand);
+			selectedIndices.clear();
+			return;
 		}
 	}
+
+	private boolean inRect(float px, float py, int x, int y, int w, int h) {
+		return px >= x && px <= x + w && py >= y && py <= y + h;
+	}
+
+	private boolean canDiscardNow() {
+		return currentState != null && currentState.canDiscard();
+	}
+
+	private void tryPlay() {
+		if (selectedIndices.size() != exactCount) {
+			messageLine1 = "Sélectionne exactement " + exactCount + " cartes !";
+			messageLine2 = "";
+			return;
+		}
+		lastAction = true;
+		submitSelection();
+	}
+
+	private void tryDiscard() {
+		if (selectedIndices.size() != exactCount) {
+			messageLine1 = "Sélectionne exactement " + exactCount + " cartes !";
+			messageLine2 = "";
+			return;
+		}
+		lastAction = false;
+		submitSelection();
+	}
+
+	private void submitSelection() {
+		var indices = new ArrayList<>(selectedIndices);
+		selectedIndices.clear();
+		mode = Mode.DISPLAY_ONLY;
+		selectionQueue.offer(indices);
+	}
+
 	// -----------------------------------------------------------------------
-	// Rendu graphique
+	// Rendu
 	// -----------------------------------------------------------------------
-
-	public void drawOrderByColorButton(java.awt.Graphics2D g) {
-		g.setColor(RED_COLOR);
-		g.fillRect(900, 800, 150, 50);
-		g.setColor(TEXT_COLOR);
-		g.drawString("TRIE_debug", 900 + 60 / 2, 800 + 45 / 2);
-	}
-	
-	public void drawOrderByRankButton(java.awt.Graphics2D g) {
-		g.setColor(RED_COLOR);
-		g.fillRect(1100, 800, 150, 50);
-		g.setColor(TEXT_COLOR);
-		g.drawString("TRIE_debug2", 1100 + 60 / 2, 800 + 45 / 2);
-	}
-
 	private void render(ApplicationContext ctx, int w, int h) {
 		context.renderFrame(g -> {
-			// Fond
 			g.setColor(BG_COLOR);
 			g.fillRect(0, 0, w, h);
 
-			// Titre
 			g.setFont(FONT_TITLE);
 			g.setColor(TEXT_COLOR);
 			g.drawString("BALATRI", w / 2 - 60, 45);
 
-			// Panneau infos blind
-			if (currentState != null) {
-				drawInfoPanel(g, w);
-			}
-			// Cartes en main
+			if (currentState != null) drawInfoPanel(g);
+
 			drawHand(g);
-
-			// Messages
+			drawActionButtons(g);
+			drawSortButtons(g);
+			drawSelectionInfo(g);
 			drawMessages(g, w, h);
-
-			// Instructions selon le mode
-			drawInstructions(g, w, h);
-
-			// Sort button
-			drawOrderByColorButton(g);
-			drawOrderByRankButton(g);
 		});
 	}
 
-	private void drawInfoPanel(java.awt.Graphics2D g, int w) {
+	private void drawInfoPanel(java.awt.Graphics2D g) {
 		g.setColor(INFO_BG);
 		g.fillRoundRect(20, 60, 400, 120, 15, 15);
 
@@ -268,34 +248,67 @@ public class ZenView implements View {
 			int cx = HAND_START_X + i * CARD_SPACING;
 			int cy = selectedIndices.contains(i) ? HAND_Y - 20 : HAND_Y;
 
-			// Ombre
 			g.setColor(new Color(0, 0, 0, 100));
 			g.fillRoundRect(cx + 4, cy + 4, CARD_W, CARD_H, 10, 10);
 
-			// Corps de la carte
 			g.setColor(selectedIndices.contains(i) ? SELECTED_COLOR : CARD_COLOR);
 			g.fillRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
 
-			// Bordure
 			g.setColor(Color.DARK_GRAY);
 			g.drawRoundRect(cx, cy, CARD_W, CARD_H, 10, 10);
 
-			// Texte rang
 			boolean isRed = card.suit().name().equals("HEARTS") || card.suit().name().equals("DIAMONDS");
 			g.setColor(isRed ? RED_COLOR : Color.BLACK);
 			g.setFont(FONT_CARD);
 
-			String rankStr = shortRank(card.rank().name());
-			String suitStr = suitSymbol(card.suit().name());
+			g.drawString(shortRank(card.rank().name()), cx + 8, cy + 22);
+			g.drawString(suitSymbol(card.suit().name()), cx + 8, cy + 40);
 
-			g.drawString(rankStr, cx + 8, cy + 22);
-			g.drawString(suitStr, cx + 8, cy + 40);
-
-			// Indice en bas
 			g.setFont(FONT_SMALL);
 			g.setColor(Color.GRAY);
 			g.drawString("[" + i + "]", cx + CARD_W / 2 - 10, cy + CARD_H - 6);
 		}
+	}
+
+	private void drawActionButtons(java.awt.Graphics2D g) {
+		if (mode != Mode.PLAYING) return;
+
+		boolean ready = selectedIndices.size() == exactCount;
+
+		g.setColor(ready ? GREEN_BTN : GREEN_BTN_DIM);
+		g.fillRoundRect(PLAY_BTN_X, PLAY_BTN_Y, BTN_W, BTN_H, 12, 12);
+		g.setColor(TEXT_COLOR);
+		g.setFont(FONT_BTN);
+		g.drawString("(P) Jouer", PLAY_BTN_X + 50, PLAY_BTN_Y + 35);
+
+		if (canDiscardNow()) {
+			g.setColor(ready ? ORANGE_BTN : ORANGE_BTN_DIM);
+			g.fillRoundRect(DISCARD_BTN_X, DISCARD_BTN_Y, BTN_W, BTN_H, 12, 12);
+			g.setColor(TEXT_COLOR);
+			g.drawString("(D) Défausser", DISCARD_BTN_X + 25, DISCARD_BTN_Y + 35);
+		}
+	}
+
+	private void drawSortButtons(java.awt.Graphics2D g) {
+		if (mode != Mode.PLAYING) return;
+
+		g.setColor(new Color(80, 80, 80));
+		g.fillRoundRect(SORT_RANK_X, SORT_RANK_Y, SORT_W, SORT_H, 8, 8);
+		g.setColor(TEXT_COLOR);
+		g.setFont(FONT_SMALL);
+		g.drawString("Tri rang", SORT_RANK_X + 22, SORT_RANK_Y + 23);
+
+		g.setColor(new Color(80, 80, 80));
+		g.fillRoundRect(SORT_COLOR_X, SORT_COLOR_Y, SORT_W, SORT_H, 8, 8);
+		g.setColor(TEXT_COLOR);
+		g.drawString("Tri couleur", SORT_COLOR_X + 14, SORT_COLOR_Y + 23);
+	}
+
+	private void drawSelectionInfo(java.awt.Graphics2D g) {
+		if (mode != Mode.PLAYING) return;
+		g.setFont(FONT_NORMAL);
+		g.setColor(TEXT_COLOR);
+		g.drawString("Sélection : " + selectedIndices.size() + " / " + exactCount, PLAY_BTN_X, PLAY_BTN_Y - 20);
 	}
 
 	private void drawMessages(java.awt.Graphics2D g, int w, int h) {
@@ -308,35 +321,6 @@ public class ZenView implements View {
 			g.setFont(FONT_NORMAL);
 			g.setColor(TEXT_COLOR);
 			g.drawString(messageLine2, w / 2 - 200, h - 75);
-		}
-	}
-
-	private void drawInstructions(java.awt.Graphics2D g, int w, int h) {
-		switch (mode) {
-		case SELECTING_CARDS -> {
-			g.setFont(FONT_NORMAL);
-			g.setColor(TEXT_COLOR);
-			g.drawString("Cliquez sur " + exactCount + " cartes puis appuyez sur ENTRÉE", w / 2 - 220, h - 40);
-			g.drawString("(" + selectedIndices.size() + "/" + exactCount + " sélectionnées)", w / 2 - 80, h - 15);
-		}
-		case WAITING_ACTION -> {
-			// Bouton Jouer
-			g.setColor(new Color(50, 150, 50));
-			g.fillRoundRect(400, 700, 160, 40, 10, 10);
-			g.setColor(TEXT_COLOR);
-			g.setFont(FONT_NORMAL);
-			g.drawString("(P) Jouer", 430, 726);
-
-			if (canDiscard) {
-				// Bouton Défausser
-				g.setColor(new Color(150, 80, 30));
-				g.fillRoundRect(600, 700, 160, 40, 10, 10);
-				g.setColor(TEXT_COLOR);
-				g.drawString("(D) Défausser", 615, 726);
-			}
-		}
-		default -> {
-		}
 		}
 	}
 
@@ -373,11 +357,11 @@ public class ZenView implements View {
 	}
 
 	// -----------------------------------------------------------------------
-	// Implémentation de View
+	// View
 	// -----------------------------------------------------------------------
 	@Override
 	public void displayBanner() {
-		// Le titre est déjà affiché en permanence dans render()
+		// Le titre est déjà permanent dans render()
 	}
 
 	@Override
@@ -392,17 +376,23 @@ public class ZenView implements View {
 	@Override
 	public List<Integer> promptCardSelection(int exactCount, int maxIndex) {
 		this.exactCount = exactCount;
-		this.mode = Mode.SELECTING_CARDS;
+		this.mode = Mode.PLAYING;
 		this.selectedIndices.clear();
 		this.messageLine1 = "";
 		this.messageLine2 = "";
 
 		try {
-			return selectionQueue.take(); // bloque jusqu'à validation
+			return selectionQueue.take();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			return List.of();
 		}
+	}
+
+	@Override
+	public boolean displayPlayerAction(boolean canDiscard) {
+		// Le choix a déjà été fait au moment du clic sur Jouer ou Défausser.
+		return lastAction;
 	}
 
 	@Override
@@ -432,23 +422,7 @@ public class ZenView implements View {
 		messageLine1 = isVictory ? "🏆 FÉLICITATIONS, VOUS AVEZ GAGNÉ !" : "GAME OVER";
 		messageLine2 = isVictory ? "Tous les blinds ont été battus !" : "Plus assez de mains pour atteindre la cible.";
 		sleep(4000);
-		if (context != null)
-			context.dispose();
-	}
-
-	@Override
-	public boolean displayPlayerAction(boolean canDiscard) {
-		this.canDiscard = canDiscard;
-		this.mode = Mode.WAITING_ACTION;
-		this.messageLine1 = "";
-		this.messageLine2 = "";
-
-		try {
-			return actionQueue.take(); // bloque jusqu'au choix
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			return true;
-		}
+		shouldClose = true;
 	}
 
 	private void sleep(long ms) {

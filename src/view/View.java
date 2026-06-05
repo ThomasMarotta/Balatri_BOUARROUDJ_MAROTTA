@@ -2,26 +2,24 @@ package view;
 
 import java.util.List;
 
-
 import domain.Card;
 import domain.Planet;
 import model.GameState;
 
 public interface View {
-    void displayBanner();
+	void displayBanner();
 
-    void displayState(GameState state, List<Card> hand);
-    
-    boolean displayPlayerAction(boolean canDiscard);
+	void displayState(GameState state, List<Card> hand);
 
-    List<Integer> promptCardSelection(int exactCount, int maxIndex);
+	boolean displayPlayerAction(boolean canDiscard);
 
-    void displayHandResult(int scoreObtained, String handRankName);
+	List<Integer> promptCardSelection(int exactCount, int maxIndex);
 
-    void displayBlindBeaten();
+	void displayHandResult(int scoreObtained, String handRankName);
 
-    void displayPlanetReward(Planet planet, int newLevel);
+	void displayBlindBeaten();
 
-    void displayGameOver(boolean isVictory);
-	
+	void displayPlanetReward(Planet planet, int newLevel);
+
+	void displayGameOver(boolean isVictory);
 }
