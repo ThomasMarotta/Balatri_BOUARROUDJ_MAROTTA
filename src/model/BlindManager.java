@@ -11,7 +11,7 @@ public class BlindManager {
 			new Blind("Big Blind", 250),
 			new Blind("The Hook", 500),
 			new Blind("The Wall", 1000),
-			new Blind("The Forax", 2500));
+			new Blind("The Forax", 500));
 
 	public Blind getFirstBlind() {
 		return BLINDS.get(0);
