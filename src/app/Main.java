@@ -1,10 +1,7 @@
 package app;
 
 import controller.GameController;
-
-import view.ConsoleView;
 import view.ZenView;
-
 
 public class Main {
 	public void main() {

@@ -2,28 +2,23 @@ package view;
 
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.GradientPaint;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-
 import com.github.forax.zen.Application;
 import com.github.forax.zen.ApplicationContext;
 import com.github.forax.zen.KeyboardEvent;
 import com.github.forax.zen.PointerEvent;
-
 import domain.Card;
 import domain.Hand;
 import domain.Planet;
 import model.GameState;
 
 public class ZenView implements View {
-
-	// =====================================================================
-	// LAYOUT
-	// =====================================================================
-	// Sidebar gauche (panneaux empilés style Balatro)
 	private static final int SIDE_X = 25;
 	private static final int SIDE_W = 280;
 
@@ -36,7 +31,6 @@ public class ZenView implements View {
 	private static final int INFO_PANEL_Y = 410;
 	private static final int INFO_PANEL_H = 130;
 
-	// Main du joueur (au centre/bas)
 	private static final int CARD_W = 85;
 	private static final int CARD_H = 120;
 	private static final int CARD_SPACING = 95;
@@ -44,7 +38,6 @@ public class ZenView implements View {
 	private static final int HAND_START_X = 360;
 	private static final int CARD_LIFT = 25;
 
-	// Boutons d'action à droite de la main (empilés verticalement)
 	private static final int PLAY_BTN_X = 1130;
 	private static final int PLAY_BTN_Y = 600;
 	private static final int DISCARD_BTN_X = 1130;
@@ -52,7 +45,6 @@ public class ZenView implements View {
 	private static final int BTN_W = 175;
 	private static final int BTN_H = 55;
 
-	// Boutons de tri (sous la main, à droite)
 	private static final int SORT_LABEL_X = 970;
 	private static final int SORT_LABEL_Y = 745;
 	private static final int SORT_RANK_X = 1090;
@@ -62,9 +54,6 @@ public class ZenView implements View {
 	private static final int SORT_W = 80;
 	private static final int SORT_H = 32;
 
-	// =====================================================================
-	// COULEURS (palette Balatro)
-	// =====================================================================
 	private static final Color BG_TOP = new Color(58, 80, 90);
 	private static final Color BG_BOTTOM = new Color(34, 50, 60);
 
@@ -92,9 +81,6 @@ public class ZenView implements View {
 	private static final Color HANDS_BLUE = new Color(70, 140, 200);
 	private static final Color DISCARDS_RED = new Color(220, 75, 90);
 
-	// =====================================================================
-	// FONTS
-	// =====================================================================
 	private static final Font FONT_TITLE = new Font("Arial", Font.BOLD, 32);
 	private static final Font FONT_PANEL_LABEL = new Font("Arial", Font.BOLD, 14);
 	private static final Font FONT_BLIND_NAME = new Font("Arial", Font.BOLD, 22);
@@ -107,12 +93,13 @@ public class ZenView implements View {
 	private static final Font FONT_NORMAL = new Font("Arial", Font.PLAIN, 16);
 	private static final Font FONT_SMALL = new Font("Arial", Font.PLAIN, 13);
 
-	// =====================================================================
-	// ÉTAT
-	// =====================================================================
+	private enum Mode {
+		DISPLAY_ONLY, PLAYING
+	}
+
 	private ApplicationContext context;
 	private List<Card> currentHand = List.of();
-	private GameState currentState = null;
+	private GameState currentState;
 	private final List<Integer> selectedIndices = new ArrayList<>();
 
 	private String messageLine1 = "";
@@ -121,14 +108,12 @@ public class ZenView implements View {
 	private final BlockingQueue<List<Integer>> selectionQueue = new ArrayBlockingQueue<>(1);
 	private boolean lastAction = true;
 
-	private enum Mode { DISPLAY_ONLY, PLAYING }
-
 	private Mode mode = Mode.DISPLAY_ONLY;
 	private int exactCount = 5;
 	private boolean shouldClose = false;
 
 	public ZenView() {
-		Thread zenThread = new Thread(() -> Application.run(BG_BOTTOM, ctx -> {
+		var zenThread = new Thread(() -> Application.run(BG_BOTTOM, ctx -> {
 			this.context = ctx;
 			var screen = ctx.getScreenInfo();
 			runLoop(ctx, screen.width(), screen.height());
@@ -142,74 +127,45 @@ public class ZenView implements View {
 	}
 
 	private void runLoop(ApplicationContext ctx, int w, int h) {
-		for (;;) {
+		while (true) {
 			if (shouldClose) {
 				ctx.dispose();
 				return;
 			}
 			var event = ctx.pollOrWaitEvent(16);
-
 			if (event != null) {
 				switch (event) {
-				case KeyboardEvent ke -> handleKeyboard(ke);
 				case PointerEvent pe -> handlePointer(pe);
-				default -> {}
+				default -> {
+				}
 				}
 			}
-
 			render(ctx, w, h);
 		}
 	}
 
-	// =====================================================================
-	// ÉVÉNEMENTS
-	// =====================================================================
-	private void handleKeyboard(KeyboardEvent ke) {
-		if (ke.action() != KeyboardEvent.Action.KEY_PRESSED) return;
-		if (mode != Mode.PLAYING) return;
-
-		if (ke.key() == KeyboardEvent.Key.P) {
-			tryPlay();
-		} else if (ke.key() == KeyboardEvent.Key.D && canDiscardNow()) {
-			tryDiscard();
-		}
-	}
-
 	private void handlePointer(PointerEvent pe) {
-		if (pe.action() != PointerEvent.Action.POINTER_UP) return;
-		if (mode != Mode.PLAYING) return;
+		if (pe.action() != PointerEvent.Action.POINTER_UP || mode != Mode.PLAYING) {
+			return;
+		}
+		var px = pe.location().x();
+		var py = pe.location().y();
 
-		float px = pe.location().x();
-		float py = pe.location().y();
-
-		// 1. Toggle sélection d'une carte
-		for (int i = 0; i < currentHand.size(); i++) {
-			int cx = HAND_START_X + i * CARD_SPACING;
-			int cy = selectedIndices.contains(i) ? HAND_Y - CARD_LIFT : HAND_Y;
-			if (inRect(px, py, cx, cy, CARD_W, CARD_H)) {
-				if (selectedIndices.contains(i)) {
-					selectedIndices.remove(Integer.valueOf(i));
-				} else if (selectedIndices.size() < exactCount) {
-					selectedIndices.add(i);
-				}
-				messageLine1 = "";
+		for (var i = 0; i < currentHand.size(); i++) {
+			var cy = selectedIndices.contains(i) ? HAND_Y - CARD_LIFT : HAND_Y;
+			if (inRect(px, py, HAND_START_X + i * CARD_SPACING, cy, CARD_W, CARD_H)) {
+				toggleSelection(i);
 				return;
 			}
 		}
-
-		// 2. Play
 		if (inRect(px, py, PLAY_BTN_X, PLAY_BTN_Y, BTN_W, BTN_H)) {
 			tryPlay();
 			return;
 		}
-
-		// 3. Discard
 		if (canDiscardNow() && inRect(px, py, DISCARD_BTN_X, DISCARD_BTN_Y, BTN_W, BTN_H)) {
 			tryDiscard();
 			return;
 		}
-
-		// 4. Tri
 		if (inRect(px, py, SORT_RANK_X, SORT_RANK_Y, SORT_W, SORT_H)) {
 			currentHand = Hand.sortByRank(currentHand);
 			selectedIndices.clear();
@@ -218,8 +174,16 @@ public class ZenView implements View {
 		if (inRect(px, py, SORT_COLOR_X, SORT_COLOR_Y, SORT_W, SORT_H)) {
 			currentHand = Hand.sortByColor(currentHand);
 			selectedIndices.clear();
-			return;
 		}
+	}
+
+	private void toggleSelection(int i) {
+		if (selectedIndices.contains(i)) {
+			selectedIndices.remove(Integer.valueOf(i));
+		} else if (selectedIndices.size() < exactCount) {
+			selectedIndices.add(i);
+		}
+		messageLine1 = "";
 	}
 
 	private boolean inRect(float px, float py, int x, int y, int w, int h) {
@@ -257,20 +221,15 @@ public class ZenView implements View {
 		selectionQueue.offer(indices);
 	}
 
-	// =====================================================================
-	// RENDU
-	// =====================================================================
 	private void render(ApplicationContext ctx, int w, int h) {
 		context.renderFrame(g -> {
 			drawBackground(g, w, h);
 			drawTitle(g, w);
-
 			if (currentState != null) {
 				drawBlindPanel(g);
 				drawScorePanel(g);
 				drawInfoPanel(g);
 			}
-
 			drawHand(g);
 			drawActionButtons(g);
 			drawSortButtons(g);
@@ -278,32 +237,27 @@ public class ZenView implements View {
 		});
 	}
 
-	private void drawBackground(java.awt.Graphics2D g, int w, int h) {
-		// Dégradé vertical façon table de jeu
-		var gp = new java.awt.GradientPaint(0, 0, BG_TOP, 0, h, BG_BOTTOM);
-		g.setPaint(gp);
+	private void drawBackground(Graphics2D g, int w, int h) {
+		g.setPaint(new GradientPaint(0, 0, BG_TOP, 0, h, BG_BOTTOM));
 		g.fillRect(0, 0, w, h);
 	}
 
-	private void drawTitle(java.awt.Graphics2D g, int w) {
+	private void drawTitle(Graphics2D g, int w) {
 		g.setFont(FONT_TITLE);
 		g.setColor(TEXT_COLOR);
 		var fm = g.getFontMetrics();
-		String title = "BALATRI";
+		var title = "BALATRI";
 		g.drawString(title, w / 2 - fm.stringWidth(title) / 2, 50);
 	}
 
-	// ---- Panneau Blind ----
-	private void drawBlindPanel(java.awt.Graphics2D g) {
+	private void drawBlindPanel(Graphics2D g) {
 		drawPanel(g, SIDE_X, BLIND_PANEL_Y, SIDE_W, BLIND_PANEL_H);
 
 		g.setFont(FONT_PANEL_LABEL);
 		g.setColor(TEXT_DIM);
 		g.drawString("BLIND ACTUEL", SIDE_X + 15, BLIND_PANEL_Y + 25);
 
-		// Pastille de couleur (façon "gem" de Balatro)
-		var gem = blindColor(currentState.currentBlind().name());
-		g.setColor(gem);
+		g.setColor(blindColor(currentState.currentBlind().name()));
 		g.fillOval(SIDE_X + 15, BLIND_PANEL_Y + 45, 30, 30);
 		g.setColor(PANEL_BORDER);
 		g.drawOval(SIDE_X + 15, BLIND_PANEL_Y + 45, 30, 30);
@@ -325,19 +279,17 @@ public class ZenView implements View {
 		g.drawString("chips", SIDE_X + 90, BLIND_PANEL_Y + 138);
 	}
 
-	// ---- Panneau Round Score ----
-	private void drawScorePanel(java.awt.Graphics2D g) {
+	private void drawScorePanel(Graphics2D g) {
 		drawPanel(g, SIDE_X, SCORE_PANEL_Y, SIDE_W, SCORE_PANEL_H);
 
 		g.setFont(FONT_PANEL_LABEL);
 		g.setColor(TEXT_DIM);
 		g.drawString("SCORE DE LA MANCHE", SIDE_X + 15, SCORE_PANEL_Y + 25);
 
-		// Boîte noire pour le score (style Balatro)
-		int boxX = SIDE_X + 15;
-		int boxY = SCORE_PANEL_Y + 40;
-		int boxW = SIDE_W - 30;
-		int boxH = 70;
+		var boxX = SIDE_X + 15;
+		var boxY = SCORE_PANEL_Y + 40;
+		var boxW = SIDE_W - 30;
+		var boxH = 70;
 		g.setColor(SCORE_BG);
 		g.fillRoundRect(boxX, boxY, boxW, boxH, 10, 10);
 		g.setColor(PANEL_BORDER);
@@ -345,18 +297,16 @@ public class ZenView implements View {
 
 		g.setFont(FONT_BIG_SCORE);
 		g.setColor(CHIPS_BLUE);
-		String score = String.valueOf(currentState.gameScore());
+		var score = String.valueOf(currentState.gameScore());
 		var fm = g.getFontMetrics();
 		g.drawString(score, boxX + boxW / 2 - fm.stringWidth(score) / 2, boxY + 52);
 	}
 
-	// ---- Panneau Hands & Discards ----
-	private void drawInfoPanel(java.awt.Graphics2D g) {
+	private void drawInfoPanel(Graphics2D g) {
 		drawPanel(g, SIDE_X, INFO_PANEL_Y, SIDE_W, INFO_PANEL_H);
 
-		int half = SIDE_W / 2;
+		var half = SIDE_W / 2;
 
-		// Mains
 		g.setFont(FONT_PANEL_LABEL);
 		g.setColor(TEXT_DIM);
 		g.drawString("MAINS", SIDE_X + 25, INFO_PANEL_Y + 30);
@@ -364,7 +314,6 @@ public class ZenView implements View {
 		g.setColor(HANDS_BLUE);
 		g.drawString(String.valueOf(currentState.handsLeft()), SIDE_X + 35, INFO_PANEL_Y + 95);
 
-		// Défausses
 		g.setFont(FONT_PANEL_LABEL);
 		g.setColor(TEXT_DIM);
 		g.drawString("DÉFAUSSES", SIDE_X + half + 15, INFO_PANEL_Y + 30);
@@ -373,80 +322,66 @@ public class ZenView implements View {
 		g.drawString(String.valueOf(currentState.discardsLeft()), SIDE_X + half + 35, INFO_PANEL_Y + 95);
 	}
 
-	private void drawPanel(java.awt.Graphics2D g, int x, int y, int w, int h) {
+	private void drawPanel(Graphics2D g, int x, int y, int w, int h) {
 		g.setColor(PANEL_BG);
 		g.fillRoundRect(x, y, w, h, 14, 14);
 		g.setColor(PANEL_BORDER);
 		g.drawRoundRect(x, y, w, h, 14, 14);
 	}
 
-	// ---- Main du joueur ----
-	private void drawHand(java.awt.Graphics2D g) {
-		for (int i = 0; i < currentHand.size(); i++) {
-			Card card = currentHand.get(i);
-			int cx = HAND_START_X + i * CARD_SPACING;
-			boolean selected = selectedIndices.contains(i);
-			int cy = selected ? HAND_Y - CARD_LIFT : HAND_Y;
-
-			// Glow jaune si sélectionnée
-			if (selected) {
-				g.setColor(SELECTED_GLOW);
-				g.fillRoundRect(cx - 4, cy - 4, CARD_W + 8, CARD_H + 8, 14, 14);
-			}
-
-			// Ombre portée
-			g.setColor(new Color(0, 0, 0, 110));
-			g.fillRoundRect(cx + 5, cy + 6, CARD_W, CARD_H, 12, 12);
-
-			// Corps
-			g.setColor(CARD_COLOR);
-			g.fillRoundRect(cx, cy, CARD_W, CARD_H, 12, 12);
-
-			// Bordure
-			g.setColor(CARD_BORDER);
-			g.drawRoundRect(cx, cy, CARD_W, CARD_H, 12, 12);
-
-			boolean isRed = card.suit().name().equals("HEARTS") || card.suit().name().equals("DIAMONDS");
-			g.setColor(isRed ? RED_SUIT : BLACK_SUIT);
-
-			String rankStr = shortRank(card.rank().name());
-			String suitStr = suitSymbol(card.suit().name());
-
-			// Coin haut-gauche
-			g.setFont(FONT_CARD_SMALL);
-			g.drawString(rankStr, cx + 8, cy + 20);
-			g.drawString(suitStr, cx + 8, cy + 38);
-
-			// Symbole central
-			g.setFont(FONT_CARD_BIG);
-			var fm = g.getFontMetrics();
-			g.drawString(suitStr, cx + CARD_W / 2 - fm.stringWidth(suitStr) / 2, cy + CARD_H / 2 + 12);
-
-			// Coin bas-droite (inversé)
-			g.setFont(FONT_CARD_SMALL);
-			fm = g.getFontMetrics();
-			g.drawString(rankStr, cx + CARD_W - 8 - fm.stringWidth(rankStr), cy + CARD_H - 22);
-			g.drawString(suitStr, cx + CARD_W - 8 - fm.stringWidth(suitStr), cy + CARD_H - 6);
+	private void drawHand(Graphics2D g) {
+		for (var i = 0; i < currentHand.size(); i++) {
+			var selected = selectedIndices.contains(i);
+			var cx = HAND_START_X + i * CARD_SPACING;
+			var cy = selected ? HAND_Y - CARD_LIFT : HAND_Y;
+			drawCard(g, currentHand.get(i), cx, cy, selected);
 		}
 	}
 
-	// ---- Boutons Play / Discard ----
-	private void drawActionButtons(java.awt.Graphics2D g) {
-		if (mode != Mode.PLAYING) return;
+	private void drawCard(Graphics2D g, Card card, int cx, int cy, boolean selected) {
+		if (selected) {
+			g.setColor(SELECTED_GLOW);
+			g.fillRoundRect(cx - 4, cy - 4, CARD_W + 8, CARD_H + 8, 14, 14);
+		}
 
-		boolean ready = selectedIndices.size() == exactCount;
+		g.setColor(new Color(0, 0, 0, 110));
+		g.fillRoundRect(cx + 5, cy + 6, CARD_W, CARD_H, 12, 12);
 
-		// Play
+		g.setColor(CARD_COLOR);
+		g.fillRoundRect(cx, cy, CARD_W, CARD_H, 12, 12);
+		g.setColor(CARD_BORDER);
+		g.drawRoundRect(cx, cy, CARD_W, CARD_H, 12, 12);
+
+		g.setColor(isRed(card) ? RED_SUIT : BLACK_SUIT);
+		var rank = rankLabel(card);
+		var suit = suitSymbol(card);
+
+		g.setFont(FONT_CARD_SMALL);
+		g.drawString(rank, cx + 8, cy + 20);
+		g.drawString(suit, cx + 8, cy + 38);
+
+		g.setFont(FONT_CARD_BIG);
+		var fm = g.getFontMetrics();
+		g.drawString(suit, cx + CARD_W / 2 - fm.stringWidth(suit) / 2, cy + CARD_H / 2 + 12);
+
+		g.setFont(FONT_CARD_SMALL);
+		fm = g.getFontMetrics();
+		g.drawString(rank, cx + CARD_W - 8 - fm.stringWidth(rank), cy + CARD_H - 22);
+		g.drawString(suit, cx + CARD_W - 8 - fm.stringWidth(suit), cy + CARD_H - 6);
+	}
+
+	private void drawActionButtons(Graphics2D g) {
+		if (mode != Mode.PLAYING) {
+			return;
+		}
+		var ready = selectedIndices.size() == exactCount;
 		drawActionButton(g, PLAY_BTN_X, PLAY_BTN_Y, ready ? PLAY_BTN : PLAY_BTN_DIM, "Jouer la main", "(P)");
-
-		// Discard
 		if (canDiscardNow()) {
 			drawActionButton(g, DISCARD_BTN_X, DISCARD_BTN_Y, ready ? DISCARD_BTN : DISCARD_BTN_DIM, "Défausser", "(D)");
 		}
 	}
 
-	private void drawActionButton(java.awt.Graphics2D g, int x, int y, Color bg, String label, String shortcut) {
-		// Ombre
+	private void drawActionButton(Graphics2D g, int x, int y, Color bg, String label, String shortcut) {
 		g.setColor(new Color(0, 0, 0, 90));
 		g.fillRoundRect(x + 3, y + 4, BTN_W, BTN_H, 14, 14);
 
@@ -465,19 +400,18 @@ public class ZenView implements View {
 		g.drawString(shortcut, x + BTN_W / 2 - fm.stringWidth(shortcut) / 2, y + 46);
 	}
 
-	// ---- Boutons de tri ----
-	private void drawSortButtons(java.awt.Graphics2D g) {
-		if (mode != Mode.PLAYING) return;
-
+	private void drawSortButtons(Graphics2D g) {
+		if (mode != Mode.PLAYING) {
+			return;
+		}
 		g.setFont(FONT_SMALL);
 		g.setColor(TEXT_DIM);
 		g.drawString("Trier par :", SORT_LABEL_X, SORT_LABEL_Y);
-
 		drawSortButton(g, SORT_RANK_X, SORT_RANK_Y, "Rang");
 		drawSortButton(g, SORT_COLOR_X, SORT_COLOR_Y, "Couleur");
 	}
 
-	private void drawSortButton(java.awt.Graphics2D g, int x, int y, String label) {
+	private void drawSortButton(Graphics2D g, int x, int y, String label) {
 		g.setColor(new Color(60, 80, 95));
 		g.fillRoundRect(x, y, SORT_W, SORT_H, 8, 8);
 		g.setColor(PANEL_BORDER);
@@ -489,15 +423,14 @@ public class ZenView implements View {
 		g.drawString(label, x + SORT_W / 2 - fm.stringWidth(label) / 2, y + 21);
 	}
 
-	// ---- Messages temporaires ----
-	private void drawMessages(java.awt.Graphics2D g, int w, int h) {
-		if (messageLine1.isEmpty() && messageLine2.isEmpty()) return;
-
-		// Bandeau sombre semi-transparent au centre
-		int boxW = 600;
-		int boxH = 100;
-		int boxX = w / 2 - boxW / 2;
-		int boxY = h / 2 - boxH / 2;
+	private void drawMessages(Graphics2D g, int w, int h) {
+		if (messageLine1.isEmpty() && messageLine2.isEmpty()) {
+			return;
+		}
+		var boxW = 600;
+		var boxH = 100;
+		var boxX = w / 2 - boxW / 2;
+		var boxY = h / 2 - boxH / 2;
 
 		g.setColor(new Color(0, 0, 0, 200));
 		g.fillRoundRect(boxX, boxY, boxW, boxH, 16, 16);
@@ -516,11 +449,7 @@ public class ZenView implements View {
 		}
 	}
 
-	// =====================================================================
-	// HELPERS
-	// =====================================================================
 	private Color blindColor(String blindName) {
-		// Une teinte différente par blind, comme les "gems" Balatro
 		return switch (blindName) {
 		case "Small Blind" -> new Color(100, 180, 220);
 		case "Big Blind" -> new Color(240, 180, 60);
@@ -531,49 +460,48 @@ public class ZenView implements View {
 		};
 	}
 
-	private String shortRank(String rankName) {
-		return switch (rankName) {
-		case "ACE" -> "A";
-		case "KING" -> "K";
-		case "QUEEN" -> "Q";
-		case "JACK" -> "J";
-		case "TEN" -> "10";
-		case "NINE" -> "9";
-		case "EIGHT" -> "8";
-		case "SEVEN" -> "7";
-		case "SIX" -> "6";
-		case "FIVE" -> "5";
-		case "FOUR" -> "4";
-		case "THREE" -> "3";
-		case "TWO" -> "2";
-		default -> rankName;
+	private boolean isRed(Card card) {
+		return switch (card.suit()) {
+		case HEARTS, DIAMONDS -> true;
+		case CLUBS, SPADES -> false;
 		};
 	}
 
-	private String suitSymbol(String suitName) {
-		return switch (suitName) {
-		case "HEARTS" -> "♥";
-		case "DIAMONDS" -> "♦";
-		case "CLUBS" -> "♣";
-		case "SPADES" -> "♠";
-		default -> suitName;
+	private String suitSymbol(Card card) {
+		return switch (card.suit()) {
+		case HEARTS -> "♥";
+		case DIAMONDS -> "♦";
+		case CLUBS -> "♣";
+		case SPADES -> "♠";
 		};
 	}
 
-	// =====================================================================
-	// VIEW
-	// =====================================================================
+	private String rankLabel(Card card) {
+		return switch (card.rank()) {
+		case ACE -> "A";
+		case KING -> "K";
+		case QUEEN -> "Q";
+		case JACK -> "J";
+		case TEN -> "10";
+		case NINE -> "9";
+		case EIGHT -> "8";
+		case SEVEN -> "7";
+		case SIX -> "6";
+		case FIVE -> "5";
+		case FOUR -> "4";
+		case THREE -> "3";
+		case TWO -> "2";
+		};
+	}
+
 	@Override
 	public void displayBanner() {
-		// Permanent dans render()
 	}
 
 	@Override
 	public void displayState(GameState state, List<Card> hand) {
-		Objects.requireNonNull(state);
-		Objects.requireNonNull(hand);
-		this.currentState = state;
-		this.currentHand = hand;
+		this.currentState = Objects.requireNonNull(state);
+		this.currentHand = Objects.requireNonNull(hand);
 		this.selectedIndices.clear();
 	}
 
@@ -584,7 +512,6 @@ public class ZenView implements View {
 		this.selectedIndices.clear();
 		this.messageLine1 = "";
 		this.messageLine2 = "";
-
 		try {
 			return selectionQueue.take();
 		} catch (InterruptedException e) {

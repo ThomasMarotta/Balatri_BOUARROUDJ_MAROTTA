@@ -3,7 +3,7 @@ package domain;
 import java.util.Objects;
 
 public record Card(Suit suit, Rank rank) {
-	public Card{
+	public Card {
 		Objects.requireNonNull(suit);
 		Objects.requireNonNull(rank);
 	}

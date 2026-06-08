@@ -96,6 +96,6 @@ public class GameController{
     			gameView.displayGameOver(false);
     			break;
     		}
-    	}
-    }
+			}
+		}
 }
