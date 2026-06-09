@@ -506,10 +506,14 @@ public class ZenView {
 		if (mode != Mode.PLAYING) {
 			return;
 		}
-		var ready = selectedIndices.size() == exactCount;
 		var btnX = actionBtnX();
+		var ready = selectedIndices.size() == exactCount;
 		drawActionButton(g, btnX, PLAY_BTN_Y, ready ? PLAY_BTN : PLAY_BTN_DIM, "Play Hand");
+		ready = selectedIndices.size() >= 1;
 		if (canDiscardNow()) {
+			drawActionButton(g, btnX, DISCARD_BTN_Y, ready ? DISCARD_BTN : DISCARD_BTN_DIM, "Discard");
+		}else {
+			ready = false;
 			drawActionButton(g, btnX, DISCARD_BTN_Y, ready ? DISCARD_BTN : DISCARD_BTN_DIM, "Discard");
 		}
 		drawActionButton(g, btnX, QUIT_GAME_BTN_Y, QUIT_GAME_BTN, "Quit");

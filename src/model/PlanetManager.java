@@ -12,7 +12,7 @@ public class PlanetManager {
 	private final Map<HandRank, Integer> levels;
 
 	public PlanetManager() {
-		this.levels = Arrays.stream(HandRank.values()).collect(Collectors.toMap(rank -> rank, level -> 1));
+		this.levels = Arrays.stream(HandRank.values()).collect(Collectors.toMap(rank -> rank, _ -> 1));
 	}
 
 	public void applyPlanet(Planet planet) {
