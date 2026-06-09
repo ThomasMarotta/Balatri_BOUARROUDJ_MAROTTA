@@ -1,9 +1,5 @@
 package controller;
 
-import java.util.ArrayList;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import domain.Card;
 import domain.EvaluatedHand;
 import domain.Hand;
@@ -50,23 +46,25 @@ public class GameController {
 	}
 
 	public void game(ZenView gameView) {
-		boolean replay;
-		do {
+		boolean replay = true;
+		while (replay) {
 			setupNewRun();
 			var victory = runOneGame(gameView);
-			if (gameView.wasQuitRequested()) {
+			if (gameView.wasQuitRequested())
 				return;
-			}
 			replay = gameView.displayGameOver(victory);
-		} while (replay);
+		}
 	}
 
 	private boolean runOneGame(ZenView gameView) {
 		var gameState = new GameState(this.blindManager.getFirstBlind(), 0, HANDS_PER_ROUND, DISCARDS_PER_ROUND);
-		var currentHand = Stream.generate(deck::drawOne).limit(HAND_SIZE).collect(Collectors.toCollection(ArrayList::new));
+		var currentHand = deck.drawMany(HAND_SIZE);
 
 		while (true) {
-			Stream.generate(deck::drawOne).limit(HAND_SIZE - currentHand.size()).forEach(currentHand::add);
+			var toAdd = HAND_SIZE - currentHand.size();
+			for (int i = 0; i < toAdd; i++) {
+				currentHand.add(deck.drawOne());
+			}
 			gameView.displayState(gameState, currentHand);
 
 			var selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());

@@ -32,6 +32,13 @@ public class Deck {
 		return drawPile.remove(0);
 	}
 
+	public List<Card> drawMany(int n) {
+		List<Card> cards = new ArrayList<>();
+		for (int i = 0; i < n; i++)
+			cards.add(drawOne());
+		return cards;
+	}
+
 	public void addToDiscard(Card cardToDiscard) {
 		Objects.requireNonNull(cardToDiscard);
 		this.discardPile.add(cardToDiscard);
