@@ -14,13 +14,6 @@ public record Hand(List<Card> cards) {
 		this.cards = Collections.unmodifiableList(cards);
 	}
 
-	/*
-	 * sort by color and by rank public static List<Card> sortByColor(List<Card>
-	 * cards) { Objects.requireNonNull(cards); Comparator<Card> parCouleur =
-	 * Comparator .comparing(Card::suit) .thenComparing(Card::rank);
-	 * cards.sort(parCouleur); return cards; }
-	 */
-
 	public static List<Card> sortByRank(List<Card> cards) {
 		Objects.requireNonNull(cards);
 		Comparator<Card> parCouleur = Comparator.comparing(Card::rank);
