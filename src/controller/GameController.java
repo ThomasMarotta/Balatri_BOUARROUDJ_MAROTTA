@@ -10,6 +10,7 @@ import model.BlindManager;
 import model.Deck;
 import model.GameState;
 import model.PlanetManager;
+import view.View;
 import view.ZenView;
 
 public class GameController {
@@ -45,7 +46,7 @@ public class GameController {
 		return (chips + cardChips) * mult;
 	}
 
-	public void game(ZenView gameView) {
+	public void game(View gameView) {
 		boolean replay = true;
 		while (replay) {
 			setupNewRun();
@@ -56,7 +57,7 @@ public class GameController {
 		}
 	}
 
-	private boolean runOneGame(ZenView gameView) {
+	private boolean runOneGame(View gameView) {
 		var gameState = new GameState(this.blindManager.getFirstBlind(), 0, HANDS_PER_ROUND, DISCARDS_PER_ROUND);
 		var currentHand = deck.drawMany(HAND_SIZE);
 

@@ -20,7 +20,7 @@ import domain.HandRank;
 import domain.Planet;
 import model.GameState;
 
-public class ZenView {
+public final class ZenView implements View {
 	private static final int SIDE_X = 25;
 	private static final int SIDE_W = 280;
 
@@ -757,5 +757,11 @@ public class ZenView {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	@Override
+	public void displayBanner() {
+		// TODO Auto-generated method stub
+		
 	}
 }
