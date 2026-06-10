@@ -1,5 +1,7 @@
 package controller;
 
+import java.util.List;
+
 import domain.Card;
 import domain.EvaluatedHand;
 import domain.Hand;
@@ -11,7 +13,6 @@ import model.Deck;
 import model.GameState;
 import model.PlanetManager;
 import view.View;
-import view.ZenView;
 
 public class GameController {
 	private Deck deck;
@@ -68,13 +69,19 @@ public class GameController {
 			}
 			gameView.displayState(gameState, currentHand);
 
-			var selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
-
-			if (gameView.wasQuitRequested()) {
-				return false;
+			List<Integer> selectedIndices;
+			boolean isPlay;
+			while (true) {
+				selectedIndices = gameView.promptCardSelection(CARDS_TO_PLAY, currentHand.size());
+				if (gameView.wasQuitRequested())
+					return false;
+				isPlay = gameView.displayPlayerAction(gameState.canDiscard());
+				if (!isPlay || selectedIndices.size() == CARDS_TO_PLAY)
+					break;
+				gameView.displayError("Select exactly 5 cards to play!");
 			}
 
-			if (!gameView.displayPlayerAction(gameState.canDiscard())) {
+			if (!isPlay) {
 				var cardsToDiscard = selectedIndices.stream().map(currentHand::get).toList();
 				cardsToDiscard.forEach(deck::addToDiscard);
 				gameState.decrementDiscards();
@@ -96,13 +103,10 @@ public class GameController {
 				if (blindManager.isLastBlind(gameState.currentBlind())) {
 					return true;
 				}
-
 				gameView.displayBlindBeaten();
-
 				var reward = this.planetManager.getRandomPlanet();
 				this.planetManager.applyPlanet(reward);
 				gameView.displayPlanetReward(reward, planetManager.getLevel(reward.target));
-
 				gameState.changeBlind(blindManager.getNextBlind(gameState.currentBlind()));
 				gameState.resetScore();
 				gameState.resetHandsLeft(HANDS_PER_ROUND);

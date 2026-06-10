@@ -512,7 +512,7 @@ public final class ZenView implements View {
 		ready = selectedIndices.size() >= 1;
 		if (canDiscardNow()) {
 			drawActionButton(g, btnX, DISCARD_BTN_Y, ready ? DISCARD_BTN : DISCARD_BTN_DIM, "Discard");
-		}else {
+		} else {
 			ready = false;
 			drawActionButton(g, btnX, DISCARD_BTN_Y, ready ? DISCARD_BTN : DISCARD_BTN_DIM, "Discard");
 		}
@@ -751,6 +751,12 @@ public final class ZenView implements View {
 		}
 	}
 
+	@Override
+	public void displayError(String message) {
+		messageLine1 = message;
+		messageLine2 = "";
+	}
+
 	private void sleep(long ms) {
 		try {
 			Thread.sleep(ms);
@@ -762,6 +768,6 @@ public final class ZenView implements View {
 	@Override
 	public void displayBanner() {
 		// TODO Auto-generated method stub
-		
+
 	}
 }

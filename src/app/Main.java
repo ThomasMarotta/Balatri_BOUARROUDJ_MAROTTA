@@ -7,6 +7,6 @@ import view.ConsoleView;
 public class Main {
 	public static void main(String[] args) {
 		var game = new GameController();
-		game.game(new ConsoleView());
+		game.game(new ZenView());
 	}
 }
